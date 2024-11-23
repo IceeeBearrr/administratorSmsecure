@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "845609608653",
+    "project_id": "smsecure",
+    "storage_bucket": "smsecure.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:845609608653:android:14baebb2fbe6efe57f9084",
+        "android_client_info": {
+          "package_name": "com.smsecure.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPSrI5tQ1bI2KkYH_TZgow1COnM-vQByI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
