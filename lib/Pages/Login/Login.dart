@@ -28,7 +28,7 @@ class _TelecomLoginState extends State<TelecomLogin> {
 
   // Hover state variables
   bool _isForgotPasswordHovered = false;
-  bool _isSignUpHovered = false;
+  final bool _isSignUpHovered = false;
 
   // Firestore instance
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();

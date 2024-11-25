@@ -10,6 +10,7 @@ import 'package:telecom_smsecure/Pages/Login/Login.dart';
 import 'package:telecom_smsecure/Pages/PredictionModel/PredictionModelPage.dart';
 import 'package:telecom_smsecure/Pages/ContinuousLearning/ContinuousLearningPage.dart';
 import 'package:telecom_smsecure/Pages/User/User.dart';
+import 'package:telecom_smsecure/Pages/User/UserShowDetail.dart';
 import 'package:telecom_smsecure/firebase_options.dart';
 
 Future<void> main() async {
@@ -59,7 +60,7 @@ class MainApp extends StatefulWidget {
 class MainAppState extends State<MainApp> {
   int _selectedIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  bool _isDrawerOpen = false;
+  final bool _isDrawerOpen = false;
 
   void onTabChange(int index) {
     setState(() {
@@ -70,7 +71,7 @@ class MainAppState extends State<MainApp> {
   final List<Widget> _screens = [
     const Homepage(),
     const Adminpage(),
-    const Userpage(),
+    Userpage(),
     const Predictionmodelpage(),
     const ContinuousLearningPage(),
   ];

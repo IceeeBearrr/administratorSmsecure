@@ -5,10 +5,10 @@ class SideBar extends StatelessWidget {
   final int selectedIndex;
 
   const SideBar({
-    Key? key,
+    super.key,
     required this.onTabSelected,
     required this.selectedIndex,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

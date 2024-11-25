@@ -5,8 +5,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class CustomNavigationBar extends StatefulWidget
     implements PreferredSizeWidget {
   const CustomNavigationBar({
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   State<CustomNavigationBar> createState() => _CustomNavigationBarState();
@@ -44,6 +44,7 @@ class _CustomNavigationBarState extends State<CustomNavigationBar> {
           _profileImageUrl = userData['profileImageUrl'];
         });
       }
+      
     } catch (e) {
       debugPrint("Error fetching user data: $e");
       setState(() {

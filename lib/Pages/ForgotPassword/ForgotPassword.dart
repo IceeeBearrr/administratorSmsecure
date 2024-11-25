@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class TelecomForgotPassword extends StatefulWidget {
-  const TelecomForgotPassword({Key? key}) : super(key: key);
+  const TelecomForgotPassword({super.key});
 
   @override
   State<TelecomForgotPassword> createState() => _TelecomForgotPasswordState();
@@ -29,7 +29,7 @@ class _TelecomForgotPasswordState extends State<TelecomForgotPassword> {
   String? _verificationCode; // Store verification code sent from the backend
   String _successMessage = '';
   bool _isPasswordFieldsVisible = false;
-  bool _isPasswordVisible = false;
+  final bool _isPasswordVisible = false;
   bool _isNewPasswordVisible = false; // Separate variable for new password
   bool _isConfirmPasswordVisible =
       false; // Separate variable for confirm password

@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class LearnNewPatternPageOne extends StatefulWidget {
-  const LearnNewPatternPageOne({Key? key}) : super(key: key);
+  const LearnNewPatternPageOne({super.key});
 
   @override
   State<LearnNewPatternPageOne> createState() => _LearnNewPatternPageOneState();
@@ -24,6 +26,14 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
       TextEditingController();
   final TextEditingController _reasonController = TextEditingController();
   String? selectedLabel;
+  bool isLoading = false; // For Step 3 loading state
+  bool isSuccess = false; // To track success/failure
+  String errorMessage = ""; // To store error message for failure
+
+  // Secure storage instance
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  // Firestore instance
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Shared Data to Pass
   final Map<String, dynamic> sharedData = {
@@ -55,7 +65,9 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
         padding: const EdgeInsets.all(100.0),
         child: currentStep == 1
             ? _buildStepOne()
-            : _buildStepTwo(), // Switch between steps
+            : currentStep == 2
+                ? _buildStepTwo()
+                : _buildStepThree(), // Switch between steps
       ),
     );
   }
@@ -307,11 +319,17 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
               ElevatedButton(
                 onPressed: () {
                   if (_formKey.currentState!.validate()) {
-                    sharedData["messagePattern"] =
-                        _messagePatternController.text;
-                    sharedData["label"] = selectedLabel;
-                    sharedData["reason"] = _reasonController.text;
-                    retrainModels(sharedData);
+                    setState(() {
+                      sharedData["messagePattern"] =
+                          _messagePatternController.text;
+                      sharedData["label"] = selectedLabel;
+                      sharedData["reason"] = _reasonController.text;
+                      currentStep = 3;
+                      isLoading = true; // Ensure loading is the default state
+                      isSuccess = false;
+                      errorMessage = ""; // Reset error message
+                    });
+                    _startRetrainProcess(sharedData);
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -334,18 +352,191 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
     );
   }
 
-  Future<void> retrainModels(Map<String, dynamic> sharedData) async {
-    final url = Uri.parse("http://192.168.101.80:5000/train");
+  // Step 3: Progress and Training
+  Widget _buildStepThree() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Progress Indicator
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildProgressCircle(isActive: true),
+            _buildProgressLine(),
+            _buildProgressCircle(isActive: true),
+            _buildProgressLine(),
+            _buildProgressCircle(isActive: true), // Active for Step 3
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Header Title
+        const Text(
+          "Retraining Models",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF113953),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Description
+        const Text(
+          "Please wait while the models are being retrained. This might take a few moments depending on the selected models and data provided.",
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+        const SizedBox(height: 40),
+
+        // Dynamic Content Based on Training State
+        Expanded(
+          child: Center(
+            child: isLoading
+                ? const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 20),
+                      Text(
+                        "This would take a moment...",
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    ],
+                  )
+                : isSuccess
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundColor: Colors.green.withOpacity(0.2),
+                            child: const Icon(Icons.check,
+                                color: Colors.green, size: 50),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            "Training Completed Successfully!",
+                            style: TextStyle(fontSize: 18, color: Colors.green),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundColor: Colors.red.withOpacity(0.2),
+                            child: const Icon(Icons.close,
+                                color: Colors.red, size: 50),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            "Training Failed!",
+                            style: TextStyle(fontSize: 18, color: Colors.red),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            errorMessage,
+                            style: const TextStyle(
+                                fontSize: 16, color: Colors.black),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+          ),
+        ),
+
+        // Back or Retry Button
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (!isLoading)
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    currentStep = 1; // Allow the user to restart
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey.shade300,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  "Add More",
+                  style: TextStyle(color: Colors.black, fontSize: 16),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _startRetrainProcess(Map<String, dynamic> sharedData) async {
+    setState(() {
+      isLoading = true; // Show loading initially
+      isSuccess = false;
+      errorMessage = "";
+    });
+
+    final telecomID = await _secureStorage.read(key: "telecomID");
+
+    // Fetch the telecomAdmin's name using telecomID
+    String telecomAdminName = "Unknown";
+    try {
+      final adminDoc = await _firestore
+          .collection("telecommunicationsAdmin")
+          .doc(telecomID)
+          .get();
+
+      if (adminDoc.exists) {
+        telecomAdminName = adminDoc.data()?["name"] ?? "Unknown";
+      }
+    } catch (e) {
+      print("Error fetching telecomAdmin name: $e");
+    }
+
+    final docRef = await _firestore.collection("messagePattern").add({
+      "message": sharedData["messagePattern"],
+      "label": sharedData["label"],
+      "telecomID": telecomID,
+      "status": "Learning in Progress",
+      "learnedBy":
+          sharedData["selectedModels"], // The models learning the pattern
+      "trainedBy": telecomAdminName, // Admin's name
+      "reason": sharedData["reason"],
+      "timestamp": FieldValue.serverTimestamp(), // Current timestamp
+    });
+
+    final url = Uri.parse("http://127.0.0.1:5000/train");
     final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode(sharedData), // Pass sharedData directly
+      body: jsonEncode(sharedData),
     );
 
     if (response.statusCode == 200) {
-      print("Retraining successful: ${response.body}");
+      await docRef.update({"status": "Completed"});
+      setState(() {
+        isLoading = false;
+        isSuccess = true;
+      });
     } else {
-      print("Retraining failed: ${response.statusCode} ${response.body}");
+      await docRef.update({
+        "status": "Exception Found",
+        "errorMessage": response.body,
+      });
+      setState(() {
+        isLoading = false;
+        isSuccess = false;
+        errorMessage = response.body;
+      });
     }
   }
 
