@@ -70,9 +70,9 @@ class MainAppState extends State<MainApp> {
 
   final List<Widget> _screens = [
     const Homepage(),
-    const Adminpage(),
+    const AdministratorPage(),
     Userpage(),
-    const Predictionmodelpage(),
+    const PredictionModelPage(),
     const ContinuousLearningPage(),
   ];
 

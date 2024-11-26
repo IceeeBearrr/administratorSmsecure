@@ -142,6 +142,8 @@ class _UserpageState extends State<Userpage> {
           'maliciousStatus': maliciousStatus,
         });
       }
+      userList.sort((a, b) => b['spamMessagesCount'].compareTo(a['spamMessagesCount']));
+
     } catch (e) {
       print('Error fetching user data: $e');
     }

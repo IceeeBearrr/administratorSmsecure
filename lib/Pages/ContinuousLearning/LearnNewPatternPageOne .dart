@@ -521,13 +521,34 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
       body: jsonEncode(sharedData),
     );
 
+    String actionMessage;
+    String actionColor;
+
     if (response.statusCode == 200) {
-      await docRef.update({"status": "Completed"});
+      actionMessage =
+          "Added and learned new message pattern: '${sharedData["messagePattern"]}' successfully using '${sharedData["selectedModels"].join(", ")}'.";
+      actionColor = "green";
+
+      await docRef.update({"status": "Complete"});
+
+      // Add a notification entry to Firestore
+      await _firestore.collection("notification").add({
+        "content":
+            "'${sharedData["selectedModels"].join(", ")}' model(s) have been updated.",
+        "timestamp": FieldValue.serverTimestamp(),
+        "adminName": telecomAdminName, // Admin who made the changes
+        "seenBy": [], // Initialize with an empty list
+      });
+      
       setState(() {
         isLoading = false;
         isSuccess = true;
       });
     } else {
+      actionMessage =
+          "Failed to add and learn new message pattern: '${sharedData["messagePattern"]}' using '${sharedData["selectedModels"].join(", ")}'.";
+      actionColor = "red";
+
       await docRef.update({
         "status": "Exception Found",
         "errorMessage": response.body,
@@ -536,6 +557,18 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
         isLoading = false;
         isSuccess = false;
         errorMessage = response.body;
+      });
+    }
+    // Log the action in telecommunicationsAdmin collection
+    if (telecomID != null) {
+      await _firestore
+          .collection("telecommunicationsAdmin")
+          .doc(telecomID)
+          .collection("log")
+          .add({
+        "action": actionMessage,
+        "timestamp": FieldValue.serverTimestamp(),
+        "color": actionColor,
       });
     }
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:telecom_smsecure/Pages/ContinuousLearning/CompareVersion.dart';
 import 'package:telecom_smsecure/Pages/ContinuousLearning/LearnNewPatternPageOne%20.dart';
 
 class ContinuousLearningPage extends StatefulWidget {
@@ -33,8 +34,10 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
 
   Future<void> fetchData() async {
     try {
-      QuerySnapshot snapshot =
-          await _firestore.collection('messagePattern').get();
+      QuerySnapshot snapshot = await _firestore
+          .collection('messagePattern')
+          .orderBy('timestamp', descending: true)
+          .get();
 
       List<Map<String, dynamic>> tempData = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
@@ -48,6 +51,8 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
             : data['learnedBy'] ?? 'Unknown';
 
         return {
+          "id": doc.id, // Add document ID to the map
+
           "pattern": data['message'] ?? 'No Pattern',
           "label": data['label'] ?? 'No Label',
           "learnedBy": learnedBy, // Updated to handle lists
@@ -216,7 +221,7 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold))),
                           Expanded(
-                              flex: 1,
+                              flex: 3,
                               child: Text("Learned By",
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold))),
@@ -235,6 +240,7 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
                               child: Text("Status",
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold))),
+                          Expanded(flex: 1, child: Text("")),
                         ],
                       ),
                     ),
@@ -250,7 +256,7 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
                                 flex: 3, child: Text(item["pattern"] ?? "")),
                             Expanded(flex: 1, child: Text(item["label"] ?? "")),
                             Expanded(
-                                flex: 1, child: Text(item["learnedBy"] ?? "")),
+                                flex: 3, child: Text(item["learnedBy"] ?? "")),
                             Expanded(
                                 flex: 1, child: Text(item["trainedBy"] ?? "")),
                             Expanded(
@@ -273,6 +279,26 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
                                   style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 1,
+                              child: Center(
+                                child: IconButton(
+                                  icon: const Icon(Icons.more_vert,
+                                      color: Colors.grey),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => CompareVersion(
+                                          messagePatternId: item[
+                                              "id"], // Pass the document ID
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                             ),

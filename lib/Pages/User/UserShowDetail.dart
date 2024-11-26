@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:telecom_smsecure/Pages/User/UserSpamMessage.dart';
 
 class UserShowDetail extends StatefulWidget {
   final String phoneNo;
@@ -104,6 +105,7 @@ class _UserShowDetailState extends State<UserShowDetail> {
 
       for (var spamDoc in spamContactSnapshot.docs) {
         String smsUserID = spamDoc['smsUserID'];
+        String spamContactID = spamDoc.id; // Fetch spamContactID
 
         QuerySnapshot smsUserSnapshot = await _firestore
             .collection('smsUser')
@@ -129,6 +131,7 @@ class _UserShowDetailState extends State<UserShowDetail> {
 
         for (var convo in validConversations) {
           var convoData = convo.data() as Map<String, dynamic>;
+          String conversationID = convo.id; // Extract conversationID
 
           QuerySnapshot messagesSnapshot =
               await convo.reference.collection('messages').get();
@@ -155,6 +158,8 @@ class _UserShowDetailState extends State<UserShowDetail> {
           String maliciousStatus = (outgoingMessages > 5) ? 'High' : 'Low';
 
           conversationsList.add({
+            'conversationID': conversationID, // Add conversationID
+            'spamContactID': spamContactID, // Include spamContactID
             'conversationWith': participantPhoneNo,
             'totalMessages': totalMessages,
             'spamMessages': totalSpamMessages,
@@ -374,7 +379,8 @@ class _UserShowDetailState extends State<UserShowDetail> {
                                       flex: 2,
                                       child: Center(
                                         child: Text(
-                                          user["spamMessages"]?.toString() ?? "0",
+                                          user["spamMessages"]?.toString() ??
+                                              "0",
                                           textAlign: TextAlign.center,
                                         ),
                                       ),
@@ -454,10 +460,17 @@ class _UserShowDetailState extends State<UserShowDetail> {
                                                           context,
                                                           MaterialPageRoute(
                                                             builder: (context) =>
-                                                                UserShowDetail(
-                                                              phoneNo: user[
-                                                                      "phoneNo"] ??
-                                                                  "",
+                                                                SpamMessagePage(
+                                                              conversationWith:
+                                                                  user["conversationWith"]
+                                                                          ?.toString() ??
+                                                                      "N/A",
+                                                              conversationID:
+                                                                  user["conversationID"] ??
+                                                                      "",
+                                                              spamContactID:
+                                                                  user["spamContactID"] ??
+                                                                      "",
                                                             ),
                                                           ),
                                                         );
