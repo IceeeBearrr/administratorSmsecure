@@ -512,6 +512,7 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
       "trainedBy": telecomAdminName, // Admin's name
       "reason": sharedData["reason"],
       "timestamp": FieldValue.serverTimestamp(), // Current timestamp
+      "metricsComparisons": {}, // Initialize empty metrics comparisons
     });
 
     final url = Uri.parse("http://127.0.0.1:5000/train");
@@ -525,9 +526,18 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
     String actionColor;
 
     if (response.statusCode == 200) {
+      Map<String, dynamic> metricsComparisons = {};
       actionMessage =
           "Added and learned new message pattern: '${sharedData["messagePattern"]}' successfully using '${sharedData["selectedModels"].join(", ")}'.";
       actionColor = "green";
+      for (String model in sharedData["selectedModels"]) {
+        try {
+          final comparison = await getMetricsComparison(model);
+          metricsComparisons[model] = comparison;
+        } catch (e) {
+          print('Error getting metrics for $model: $e');
+        }
+      }
 
       await docRef.update({"status": "Complete"});
 
@@ -539,7 +549,12 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
         "adminName": telecomAdminName, // Admin who made the changes
         "seenBy": [], // Initialize with an empty list
       });
-      
+
+      await _logAction(
+          telecomID!,
+          "Added and learned new message pattern: '${sharedData["messagePattern"]}' successfully.",
+          "green");
+
       setState(() {
         isLoading = false;
         isSuccess = true;
@@ -571,6 +586,68 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
         "color": actionColor,
       });
     }
+    await _logAction(
+        telecomID!,
+        "Failed to add and learn new message pattern: '${sharedData["messagePattern"]}'.",
+        "red");
+  }
+
+  Future<Map<String, dynamic>> getMetricsComparison(String modelName) async {
+    try {
+      // Get reference to the metrics collection for this model
+      final metricsRef = FirebaseFirestore.instance
+          .collection('modelMetrics')
+          .doc(modelName)
+          .collection('versions');
+
+      // Get the last two versions ordered by timestamp
+      final querySnapshot = await metricsRef
+          .orderBy('timestamp', descending: true)
+          .limit(2)
+          .get();
+
+      if (querySnapshot.docs.length < 2) {
+        throw Exception('Not enough versions available for comparison');
+      }
+
+      // Extract the current and previous versions
+      final currentVersion = querySnapshot.docs[0].data();
+      final previousVersion = querySnapshot.docs[1].data();
+
+      // Validate that both versions have the required metrics
+      final requiredMetrics = [
+        'testAccuracy',
+        'testPrecision',
+        'testRecall',
+        'testF1Score',
+        'trainAccuracy',
+        'confusionMatrix',
+        'rocCurve',
+        'accuracyCurve'
+      ];
+
+      for (final metric in requiredMetrics) {
+        if (!currentVersion.containsKey(metric) ||
+            !previousVersion.containsKey(metric)) {
+          throw Exception('Missing required metric: $metric');
+        }
+      }
+
+      // Build the comparison object
+      return {
+        'current': {
+          'metrics': currentVersion,
+          'timestamp': currentVersion['timestamp'],
+        },
+        'previous': {
+          'metrics': previousVersion,
+          'timestamp': previousVersion['timestamp'],
+        }
+      };
+    } catch (e) {
+      print('Error getting metrics comparison: $e');
+      rethrow;
+    }
   }
 
   // Helper to create a progress circle
@@ -592,5 +669,17 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
       width: 40,
       color: Colors.grey.shade300,
     );
+  }
+
+  Future<void> _logAction(String telecomID, String action, String color) async {
+    await _firestore
+        .collection("telecommunicationsAdmin")
+        .doc(telecomID)
+        .collection("log")
+        .add({
+      "action": action,
+      "timestamp": FieldValue.serverTimestamp(),
+      "color": color,
+    });
   }
 }

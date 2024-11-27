@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class AdminDetailPage extends StatefulWidget {
   final Map<String, dynamic> adminData;
@@ -50,6 +51,29 @@ class _AdminDetailPageState extends State<AdminDetailPage> {
     }
   }
 
+  List<TextSpan> _highlightKeywords(String text) {
+    final words = text.split(' '); // Split the action text into words
+    return words.map((word) {
+      if (word.toLowerCase().contains("successfully")) {
+        return TextSpan(
+          text: "$word ",
+          style:
+              const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+        );
+      } else if (word.toLowerCase().contains("failed")) {
+        return TextSpan(
+          text: "$word ",
+          style:
+              const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        );
+      } else {
+        return TextSpan(
+          text: "$word ",
+        );
+      }
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -68,15 +92,16 @@ class _AdminDetailPageState extends State<AdminDetailPage> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding:
+                  const EdgeInsets.only(top: 30.0, right: 70.0, left: 70.0),
               child: Column(
                 children: [
                   // Profile Section
                   CircleAvatar(
                     radius: 50,
                     backgroundColor: Colors.grey[300],
-                    child: const Icon(Icons.person,
-                        size: 50, color: Colors.white),
+                    child:
+                        const Icon(Icons.person, size: 50, color: Colors.white),
                   ),
                   const SizedBox(height: 10),
                   Text(
@@ -86,8 +111,7 @@ class _AdminDetailPageState extends State<AdminDetailPage> {
                   ),
                   const SizedBox(height: 5),
                   Text("Telecom ID: ${widget.adminData['id'] ?? 'No ID'}"),
-                  Text(
-                      "Total Actions: ${widget.adminData['actions'] ?? 0}"),
+                  Text("Total Actions: ${widget.adminData['actions'] ?? 0}"),
                   const SizedBox(height: 20),
 
                   // Logs Section
@@ -106,69 +130,92 @@ class _AdminDetailPageState extends State<AdminDetailPage> {
                           ),
                         ],
                       ),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            // Table Headers
-                            const Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 10.0, vertical: 8.0),
-                              child: Row(
+                      child: logs.isEmpty
+                          ? const Center(
+                              child: Text(
+                                "No logs available",
+                                style:
+                                    TextStyle(fontSize: 16, color: Colors.grey),
+                              ),
+                            )
+                          : SingleChildScrollView(
+                              child: Column(
                                 children: [
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(
-                                      "Action",
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold),
+                                  // Table Headers
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 10.0, vertical: 8.0),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          flex: 3,
+                                          child: Text(
+                                            "Action",
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          flex: 2,
+                                          child: Text(
+                                            "Timestamp",
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      "Timestamp",
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
+                                  const Divider(),
+
+                                  // Table Rows
+                                  ...logs.map((log) {
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10.0,
+                                        vertical: 8.0,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          // Highlighted Action
+                                          Expanded(
+                                            flex: 3,
+                                            child: RichText(
+                                              text: TextSpan(
+                                                children: _highlightKeywords(
+                                                    log["action"] ?? ""),
+                                                style: const TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          // Timestamp
+                                          Expanded(
+                                            flex: 2,
+                                            child: Center(
+                                              child: Text(
+                                                DateFormat('dd-MM-yyyy HH:mm')
+                                                    .format(
+                                                  log["timestamp"] ??
+                                                      DateTime.now(),
+                                                ),
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
                                 ],
                               ),
                             ),
-                            const Divider(),
-
-                            // Table Rows
-                            ...logs.map((log) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10.0,
-                                  vertical: 8.0,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(log["action"] ?? "N/A"),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Center(
-                                        child: Text(
-                                          log["timestamp"]
-                                                  ?.toString()
-                                                  ?.substring(0, 16) ??
-                                              "N/A",
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                        ),
-                      ),
                     ),
                   ),
                 ],

@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:telecom_smsecure/Pages/Profile/ProfilePage.dart';
 
 class CustomNavigationBar extends StatefulWidget
     implements PreferredSizeWidget {
@@ -65,41 +68,51 @@ class _CustomNavigationBarState extends State<CustomNavigationBar> {
       actions: [
         const Icon(Icons.notifications, color: Color(0xFF113953)),
         const SizedBox(width: 50),
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.grey[300],
-              backgroundImage: _profileImageUrl != null
-                  ? NetworkImage(_profileImageUrl!)
-                  : null,
-              child: _profileImageUrl == null
-                  ? const Icon(Icons.person, size: 18, color: Colors.white)
-                  : null,
-            ),
-            const SizedBox(width: 10),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _userName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF113953),
+        GestureDetector(
+          onTap: () {
+            // Navigate to the ProfilePage
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => ProfilePage()),
+            );
+          },
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.grey[300],
+                // Updated image handling
+                backgroundImage: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                    ? MemoryImage(base64Decode(_profileImageUrl!))
+                    : null,
+                child: _profileImageUrl == null || _profileImageUrl!.isEmpty
+                    ? const Icon(Icons.person, size: 18, color: Colors.white)
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _userName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF113953),
+                    ),
                   ),
-                ),
-                const Text(
-                  "Admin",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
+                  const Text(
+                    "Admin",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(width: 80),
       ],

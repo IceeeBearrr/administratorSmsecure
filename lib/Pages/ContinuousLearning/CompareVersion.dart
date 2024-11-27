@@ -75,78 +75,102 @@ class _CompareVersionState extends State<CompareVersion> {
       }
 
       // For each selected model
-      for (String modelName in selectedModels) {
-        // Get the prediction model document
-        final modelQuerySnapshot = await FirebaseFirestore.instance
-            .collection('predictionModel')
-            .where('name', isEqualTo: modelName)
-            .get();
+    for (String modelName in selectedModels) {
+      print('Processing model: $modelName');
 
-        if (modelQuerySnapshot.docs.isEmpty) continue;
+      final modelQuerySnapshot = await FirebaseFirestore.instance
+          .collection('predictionModel')
+          .where('name', isEqualTo: modelName)
+          .get();
 
-        final modelDoc = modelQuerySnapshot.docs.first;
+      if (modelQuerySnapshot.docs.isEmpty) continue;
+      final modelDoc = modelQuerySnapshot.docs.first;
 
-        // Get metrics for current version (matching messagePattern timestamp)
-        final allMetricsQuery = await modelDoc.reference
-            .collection('Metrics')
-            .orderBy('timestamp', descending: true)
-            .get();
+      final allMetricsQuery = await modelDoc.reference
+          .collection('Metrics')
+          .orderBy('timestamp', descending: true)
+          .get();
 
-        if (allMetricsQuery.docs.isEmpty) continue;
+      if (allMetricsQuery.docs.isEmpty) continue;
 
-        // Find the closest timestamp to messagePatternTimestamp
-        Map<String, dynamic>? currentMetrics;
-        DateTime? closestTimestamp;
-        Duration smallestDifference =
-            const Duration(days: 365); // Initialize with a large duration
+      List<Map<String, dynamic>> modelVersions = [];
+      
+      // Find the closest version after message pattern timestamp
+      Map<String, dynamic>? currentVersion;
+      DateTime? currentTimestamp;
+      Duration smallestFutureGap = const Duration(days: 365);
 
-        for (var doc in allMetricsQuery.docs) {
-          DateTime metricTimestamp =
-              (doc.get('timestamp') as Timestamp).toDate();
-          Duration difference =
-              metricTimestamp.difference(messagePatternTimestamp!).abs();
-
-          if (difference < smallestDifference) {
-            smallestDifference = difference;
-            currentMetrics = doc.data();
-            closestTimestamp = metricTimestamp;
+      // First, find the closest future timestamp (current version)
+      for (var doc in allMetricsQuery.docs) {
+        DateTime docTimestamp = (doc.get('timestamp') as Timestamp).toDate();
+        if (docTimestamp.isAfter(messagePatternTimestamp!)) {
+          Duration gap = docTimestamp.difference(messagePatternTimestamp!);
+          if (gap < smallestFutureGap) {
+            smallestFutureGap = gap;
+            currentVersion = doc.data();
+            currentTimestamp = docTimestamp;
           }
-        }
-
-        // Get previous metrics (the next most recent before the closest timestamp)
-        Map<String, dynamic>? previousMetrics;
-        if (currentMetrics != null && closestTimestamp != null) {
-          final previousMetricsQuery = await modelDoc.reference
-              .collection('Metrics')
-              .where('timestamp', isLessThan: closestTimestamp)
-              .orderBy('timestamp', descending: true)
-              .limit(1)
-              .get();
-
-          if (previousMetricsQuery.docs.isNotEmpty) {
-            previousMetrics = previousMetricsQuery.docs.first.data();
-          }
-        }
-
-        if (currentMetrics != null) {
-          modelMetrics[modelName] = [
-            if (previousMetrics != null) previousMetrics,
-            currentMetrics,
-          ];
         }
       }
 
-      setState(() {
-        isLoading = false;
-      });
-    } catch (e) {
-      print('Error loading data: $e');
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
+      // If no future timestamp found, use the closest past timestamp
+      if (currentVersion == null) {
+        Duration smallestPastGap = const Duration(days: 365);
+        for (var doc in allMetricsQuery.docs) {
+          DateTime docTimestamp = (doc.get('timestamp') as Timestamp).toDate();
+          Duration gap = messagePatternTimestamp!.difference(docTimestamp);
+          if (gap < smallestPastGap) {
+            smallestPastGap = gap;
+            currentVersion = doc.data();
+            currentTimestamp = docTimestamp;
+          }
+        }
+      }
 
+      // Find the previous version (just before the current version)
+      Map<String, dynamic>? previousVersion;
+      if (currentTimestamp != null) {
+        Duration smallestGap = const Duration(days: 365);
+        for (var doc in allMetricsQuery.docs) {
+          DateTime docTimestamp = (doc.get('timestamp') as Timestamp).toDate();
+          if (docTimestamp.isBefore(currentTimestamp!)) {
+            Duration gap = currentTimestamp.difference(docTimestamp);
+            if (gap < smallestGap) {
+              smallestGap = gap;
+              previousVersion = doc.data();
+            }
+          }
+        }
+      }
+
+      // Add versions in correct order
+      if (previousVersion != null) {
+        modelVersions.add(previousVersion);
+      }
+      if (currentVersion != null) {
+        modelVersions.add(currentVersion);
+      }
+
+      print('$modelName - Versions count: ${modelVersions.length}');
+      print('$modelName - Current timestamp: ${currentVersion?['timestamp']}');
+      if (previousVersion != null) {
+        print('$modelName - Previous timestamp: ${previousVersion['timestamp']}');
+      }
+
+      modelMetrics[modelName] = modelVersions;
+    }
+
+    setState(() {
+      isLoading = false;
+    });
+
+  } catch (e) {
+    print('Error loading data: $e');
+    setState(() {
+      isLoading = false;
+    });
+  }
+}
   Widget _buildComparisonStep() {
     if (selectedModels.isEmpty) {
       return const Center(
@@ -160,6 +184,14 @@ class _CompareVersionState extends State<CompareVersion> {
     final currentModel = selectedModels[currentModelIndex];
     final metrics = modelMetrics[currentModel];
 
+    print('Building comparison for model: $currentModel');
+    print('Metrics available: ${metrics?.length ?? 0} versions');
+    if (metrics != null) {
+      print('Previous version metrics keys: ${metrics[0].keys.toList()}');
+      if (metrics.length > 1) {
+        print('Current version metrics keys: ${metrics[1].keys.toList()}');
+      }
+    }
     if (metrics == null || metrics.isEmpty) {
       return Center(
         child: Text(
@@ -198,7 +230,11 @@ class _CompareVersionState extends State<CompareVersion> {
                         color: Colors.white,
                         child: metrics.length > 1
                             ? _buildMetricsComparison(
-                                metrics[0], 'Previous Version')
+                                metrics[0],
+                                'Previous Version',
+                                modelName: currentModel,
+                                versionIndex: 0,
+                              )
                             : const Center(
                                 child: Padding(
                                   padding: EdgeInsets.all(16.0),
@@ -211,8 +247,11 @@ class _CompareVersionState extends State<CompareVersion> {
                       child: Card(
                         color: Colors.white,
                         child: _buildMetricsComparison(
-                            metrics.length > 1 ? metrics[1] : metrics[0],
-                            'Current Version'),
+                          metrics.length > 1 ? metrics[1] : metrics[0],
+                          'Current Version',
+                          modelName: currentModel,
+                          versionIndex: metrics.length > 1 ? 1 : 0,
+                        ),
                       ),
                     ),
                   ],
@@ -275,8 +314,14 @@ class _CompareVersionState extends State<CompareVersion> {
     );
   }
 
-  Widget _buildMetricsComparison(Map<String, dynamic>? metrics, String title) {
+  Widget _buildMetricsComparison(Map<String, dynamic>? metrics, String title,
+      {required String modelName, required int versionIndex}) {
+    print('Building metrics comparison for $modelName - $title');
+    print('Metrics content: ${metrics?.keys.toList()}');
+
     if (metrics == null) {
+      print('No metrics available for $modelName - $title');
+
       return Center(child: Text('No $title data available'));
     }
 
@@ -294,18 +339,23 @@ class _CompareVersionState extends State<CompareVersion> {
             const SizedBox(height: 20),
             _buildMetricsTable(metrics),
             const SizedBox(height: 20),
-            _buildDecodedImage(metrics['confusionMatrix'], 'Confusion Matrix'),
-            const SizedBox(height: 20),
-            if (metrics['accuracyCurve'] != null)
-              _buildDecodedImage(metrics['accuracyCurve'], 'Accuracy Curve'),
-            if (metrics['learningCurve'] != null)
-              _buildDecodedImage(metrics['learningCurve'], 'Learning Curve'),
-            if (metrics['lossCurve'] != null) ...[
+            if (metrics['confusionMatrix'] != null) ...[
+              _buildDecodedImage(
+                  metrics['confusionMatrix'], 'Confusion Matrix'),
               const SizedBox(height: 20),
-              _buildDecodedImage(metrics['lossCurve'], 'Loss Curve'),
             ],
-            _buildDecodedImage(metrics['rocCurve'], 'ROC Curve'),
-            const SizedBox(height: 20),
+            if (metrics['accuracyCurve'] != null) ...[
+              _buildDecodedImage(metrics['accuracyCurve'], 'Accuracy Curve'),
+              const SizedBox(height: 20),
+            ],
+            if (metrics['lossCurve'] != null) ...[
+              _buildDecodedImage(metrics['lossCurve'], 'Loss Curve'),
+              const SizedBox(height: 20),
+            ],
+            if (metrics['rocCurve'] != null) ...[
+              _buildDecodedImage(metrics['rocCurve'], 'ROC Curve'),
+              const SizedBox(height: 20),
+            ],
           ],
         ),
       ),
@@ -359,6 +409,10 @@ class _CompareVersionState extends State<CompareVersion> {
               decodedBytes,
               height: 400,
               fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                print('Error loading image for $title: $error');
+                return Text('Error loading $title');
+              },
             ),
           ),
         ],
@@ -752,30 +806,6 @@ class _CompareVersionState extends State<CompareVersion> {
           );
         }
       } else {
-        // For Linear SVM and Multinomial NB
-        final learningCurve =
-            await getImageFromBase64(versionMetrics['learningCurve']);
-        if (learningCurve != null) {
-          pdf.addPage(
-            pw.Page(
-              margin: const pw.EdgeInsets.all(40),
-              build: (context) => pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    "Learning Curve - $versionLabel",
-                    style: pw.TextStyle(
-                        font: ttf,
-                        fontSize: 16,
-                        fontWeight: pw.FontWeight.bold),
-                  ),
-                  pw.SizedBox(height: 20),
-                  pw.Center(child: pw.Image(learningCurve, height: 400)),
-                ],
-              ),
-            ),
-          );
-        }
         final accuracyCurve =
             await getImageFromBase64(versionMetrics['accuracyCurve']);
         if (accuracyCurve != null) {
