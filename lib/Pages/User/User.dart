@@ -1,3 +1,4 @@
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -13,7 +14,7 @@ class Userpage extends StatefulWidget {
 class _UserpageState extends State<Userpage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _searchController = TextEditingController();
-  String _selectedFilter = "Phone no"; // Default selected dropdown value
+  String _selectedFilter = "ID"; // Default selected dropdown value
   List<Map<String, dynamic>> _filteredData = [];
   List<Map<String, dynamic>> _data = [];
 
@@ -29,10 +30,13 @@ class _UserpageState extends State<Userpage> {
           .get();
 
       for (var spamDoc in spamContactSnapshot.docs) {
-        String phoneNo = spamDoc['phoneNo'];
+        String phoneNo = spamDoc['phoneNo'] ?? '';
+        String docId = spamDoc.id; // Get the document ID
 
         // Avoid duplicates by checking if the phone number is already processed
-        if (processedPhoneNumbers.contains(phoneNo)) continue;
+        if (phoneNo.isEmpty || processedPhoneNumbers.contains(phoneNo)) {
+          continue;
+        }
 
         processedPhoneNumbers.add(phoneNo);
 
@@ -53,18 +57,18 @@ class _UserpageState extends State<Userpage> {
         // Calculate major detected by
         Map<String, int> detectedByCount = {};
         for (var messageDoc in spamMessagesSnapshot.docs) {
-          String detectedBy = messageDoc['detectedDue'];
+          String detectedBy = messageDoc['detectedDue'] ?? 'None';
           detectedByCount[detectedBy] = (detectedByCount[detectedBy] ?? 0) + 1;
         }
-        String majorDetectedBy = detectedByCount.isNotEmpty
-            ? detectedByCount.entries
+        String majorDetectedBy = detectedByCount.isEmpty
+            ? 'None'
+            : detectedByCount.entries
                 .reduce((a, b) => a.value > b.value ? a : b)
-                .key
-            : 'None';
+                .key;
 
         // Check active status
         QuerySnapshot conversationSnapshot = await _firestore
-            .collection('Conversations')
+            .collection('conversations')
             .where('participants', arrayContains: phoneNo)
             .get();
 
@@ -81,15 +85,12 @@ class _UserpageState extends State<Userpage> {
         }
 
         // Update malicious status based on spam data
-        String maliciousStatus;
-        if (spamConversations == 0 && spamMessagesCount == 0) {
-          maliciousStatus = 'Low';
-        } else {
-          maliciousStatus = 'High';
-        }
+        String maliciousStatus =
+            (spamConversations == 0 && spamMessagesCount == 0) ? 'Low' : 'High';
 
         // Add to user list
         userList.add({
+          'id': docId, // Add the document ID
           'phoneNo': phoneNo,
           'spamConversations': spamConversations,
           'spamMessagesCount': spamMessagesCount,
@@ -104,16 +105,18 @@ class _UserpageState extends State<Userpage> {
           await _firestore.collection('smsUser').get();
 
       for (var smsUserDoc in smsUserSnapshot.docs) {
-        String phoneNo = smsUserDoc['phoneNo'];
+        String phoneNo = smsUserDoc['phoneNo'] ?? '';
+        String docId = smsUserDoc.id; // Get the document ID
 
         // Skip if the phone number is already processed
-        if (processedPhoneNumbers.contains(phoneNo)) continue;
-
+        if (phoneNo.isEmpty || processedPhoneNumbers.contains(phoneNo)) {
+          continue;
+        }
         processedPhoneNumbers.add(phoneNo);
 
         // Check active status
         QuerySnapshot conversationSnapshot = await _firestore
-            .collection('Conversations')
+            .collection('conversations')
             .where('participants', arrayContains: phoneNo)
             .get();
 
@@ -134,6 +137,7 @@ class _UserpageState extends State<Userpage> {
 
         // Add to user list
         userList.add({
+          'id': docId, // Add document ID
           'phoneNo': phoneNo,
           'spamConversations': 0,
           'spamMessagesCount': 0,
@@ -142,8 +146,8 @@ class _UserpageState extends State<Userpage> {
           'maliciousStatus': maliciousStatus,
         });
       }
-      userList.sort((a, b) => b['spamMessagesCount'].compareTo(a['spamMessagesCount']));
-
+      userList.sort(
+          (a, b) => b['spamMessagesCount'].compareTo(a['spamMessagesCount']));
     } catch (e) {
       print('Error fetching user data: $e');
     }
@@ -152,28 +156,53 @@ class _UserpageState extends State<Userpage> {
   }
 
   final List<String> _filterOptions = [
-    "Phone no",
-    "Detected as Spam in Conversations",
-    "Number of Spam Messages",
-    "Major Detected By",
-    "Active Status",
-    "Malicious Status",
+    "ID",
+    "Phone", // Shortened from "Phone no"
+    "Status", // Changed from "Malicious Status"
+    "Active", // Shortened from "Active Status"
+    "Detection" // Shortened from "Detected By"
   ];
 
-  void _filterData(String searchText) {
-    setState(() {
-      if (searchText.isEmpty) {
-        _filteredData = _data; // Reset to all data when search text is empty
-      } else {
-        _filteredData = _data.where((item) {
-          final valueToSearch = (item[_selectedFilter.toLowerCase()] ?? '')
-              .toString()
-              .toLowerCase();
-          return valueToSearch.contains(searchText.toLowerCase());
-        }).toList();
-      }
-    });
-  }
+void _filterData(String searchText) {
+  setState(() {
+    if (searchText.isEmpty) {
+      _filteredData = _data;
+    } else {
+      _filteredData = _data.where((user) {
+        switch (_selectedFilter) {
+          case 'ID':
+            return (user['id']?.toString().toLowerCase() ?? '')
+                .contains(searchText.toLowerCase());
+            
+          case 'Phone':
+            return (user['phoneNo']?.toString().toLowerCase() ?? '')
+                .contains(searchText.toLowerCase());
+            
+          case 'Active':
+            // Convert boolean to string and check for active/inactive
+            if (searchText.toLowerCase() == 'active') {
+              return user['isActive'] == true;
+            } else if (searchText.toLowerCase() == 'inactive') {
+              return user['isActive'] == false;
+            }
+            return (user['isActive'] == true ? 'active' : 'inactive')
+                .contains(searchText.toLowerCase());
+            
+          case 'Detection':
+            String detection = (user['majorDetectedBy']?.toString() ?? 'None').toLowerCase();
+            return detection.contains(searchText.toLowerCase());
+            
+          case 'Status':
+            String status = (user['maliciousStatus']?.toString() ?? 'Low').toLowerCase();
+            return status.contains(searchText.toLowerCase());
+            
+          default:
+            return false;
+        }
+      }).toList();
+    }
+  });
+}
 
   void _onSearchChanged(String value) {
     _filterData(value);
@@ -209,35 +238,61 @@ class _UserpageState extends State<Userpage> {
             Row(
               children: [
                 // Dropdown with enhanced style
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedFilter,
-                      icon:
-                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                      style: const TextStyle(color: Colors.black, fontSize: 16),
-                      items: _filterOptions.map((option) {
-                        return DropdownMenuItem<String>(
-                          value: option,
-                          child: Text(option),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedFilter = value;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
+Container(
+  padding: const EdgeInsets.symmetric(horizontal: 10),
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(color: Colors.grey.shade300),
+  ),
+  child: DropdownButtonHideUnderline(
+    child: DropdownButton2<String>(
+      value: _selectedFilter,
+      items: _filterOptions.map((option) {
+        return DropdownMenuItem<String>(
+          value: option,
+          child: Text(option),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          setState(() {
+            _selectedFilter = value;
+            _searchController.clear();
+            _filteredData = _data;
+          });
+        }
+      },
+      buttonStyleData: ButtonStyleData(
+        height: 40,
+        width: 140,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.white,
+        ),
+      ),
+      dropdownStyleData: DropdownStyleData(
+        maxHeight: 200,
+        width: 140,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.white,
+        ),
+        scrollbarTheme: ScrollbarThemeData(
+          radius: const Radius.circular(40),
+          thickness: WidgetStateProperty.all(6),
+          thumbVisibility: WidgetStateProperty.all(true),
+        ),
+      ),
+      menuItemStyleData: const MenuItemStyleData(
+        height: 40,
+        padding: EdgeInsets.symmetric(horizontal: 8),
+      ),
+    ),
+  ),
+),
+
                 const SizedBox(width: 10),
                 // Search bar
                 Expanded(
@@ -245,7 +300,7 @@ class _UserpageState extends State<Userpage> {
                     controller: _searchController,
                     onChanged: _onSearchChanged,
                     decoration: InputDecoration(
-                      hintText: "Search by $_selectedFilter",
+                      hintText: "Search by ${_selectedFilter.toLowerCase()}",
                       prefixIcon: const Icon(Icons.search, color: Colors.grey),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -285,6 +340,11 @@ class _UserpageState extends State<Userpage> {
                           EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
                       child: Row(
                         children: [
+                          Expanded(
+                              flex: 2,
+                              child: Text("ID",
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold))),
                           Expanded(
                               flex: 2,
                               child: Text("Phone no",
@@ -332,6 +392,10 @@ class _UserpageState extends State<Userpage> {
                             horizontal: 10.0, vertical: 8.0),
                         child: Row(
                           children: [
+                            Expanded(
+                              flex: 2,
+                              child: Text(user["id"]),
+                            ),
                             Expanded(
                               flex: 2,
                               child: Text(

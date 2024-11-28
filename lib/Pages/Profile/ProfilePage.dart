@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -6,6 +7,8 @@ import 'package:intl/intl.dart';
 import 'package:telecom_smsecure/Pages/Profile/EditProfilePage.dart'; // Add this import for formatting timestamps
 
 class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key});
+
   @override
   _ProfilePageState createState() => _ProfilePageState();
 }
@@ -19,7 +22,17 @@ class _ProfilePageState extends State<ProfilePage> {
   int predictionModelCount = 0;
   int downloadCount = 0;
   int bannedUserCount = 0;
-  List<Map<String, dynamic>> logs = []; // Add this line to initialize logs
+  List<Map<String, dynamic>> logs = [];
+  List<Map<String, dynamic>> filteredLogs = [];
+  String? selectedFilter = 'Prediction Model';
+  String searchQuery = '';
+  int adminCount = 0; // Add this line with other count variables
+
+  final List<String> filters = [
+    'Prediction Model',
+    'Download',
+    'Ban User',
+  ];
 
   @override
   void initState() {
@@ -55,6 +68,28 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  void applyFilters() {
+    setState(() {
+      filteredLogs = logs.where((log) {
+        final action = log['action'].toLowerCase();
+        bool matchesFilter = false;
+
+        if (selectedFilter?.toLowerCase() == 'prediction model') {
+          matchesFilter = action.contains('add and learn');
+        } else if (selectedFilter?.toLowerCase() == 'download') {
+          matchesFilter = action.startsWith('download');
+        } else if (selectedFilter?.toLowerCase() == 'ban user') {
+          matchesFilter = action.startsWith('banned');
+        }
+
+        bool matchesSearch =
+            searchQuery.isEmpty || action.contains(searchQuery.toLowerCase());
+
+        return matchesFilter && matchesSearch;
+      }).toList();
+    });
+  }
+
   Future<void> _loadContributionCounts(String telecomID) async {
     try {
       final querySnapshot = await _firestore
@@ -66,6 +101,7 @@ class _ProfilePageState extends State<ProfilePage> {
       int predictionCount = 0;
       int downloadCount = 0;
       int bannedCount = 0;
+      int adminCount = 0; // Initialize admin count
 
       for (var doc in querySnapshot.docs) {
         final action = doc.data()['action'] ?? '';
@@ -75,6 +111,9 @@ class _ProfilePageState extends State<ProfilePage> {
           downloadCount++;
         } else if (action.startsWith("Banned")) {
           bannedCount++;
+        } else if (action.toLowerCase().startsWith("admin")) {
+          // Add admin count condition
+          adminCount++;
         }
       }
 
@@ -82,6 +121,7 @@ class _ProfilePageState extends State<ProfilePage> {
         predictionModelCount = predictionCount;
         this.downloadCount = downloadCount;
         bannedUserCount = bannedCount;
+        this.adminCount = adminCount; // Update admin count
       });
     } catch (e) {
       print("Error loading contributions: $e");
@@ -98,7 +138,7 @@ class _ProfilePageState extends State<ProfilePage> {
         iconTheme: const IconThemeData(color: Colors.black),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, true),
         ),
         title: const Text(
           "Profile",
@@ -122,7 +162,6 @@ class _ProfilePageState extends State<ProfilePage> {
                           flex: 3,
                           child: Card(
                             color: Colors.white, // Ensures white background
-
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -262,7 +301,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    "Contribution on Prediction Model",
+                                    "Overview",
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
@@ -276,6 +315,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                   _buildContributionMetric(
                                       "Number of Banned Users",
                                       bannedUserCount),
+                                  _buildContributionMetric(
+                                      "Number of Added Admins",
+                                      adminCount), // Add this line
                                 ],
                               ),
                             ),
@@ -296,82 +338,197 @@ class _ProfilePageState extends State<ProfilePage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       elevation: 2,
-                      child: logs.isEmpty
-                          ? const Center(
-                              child: Text(
-                                "No logs available",
-                                style:
-                                    TextStyle(fontSize: 16, color: Colors.grey),
-                              ),
-                            )
-                          : SingleChildScrollView(
-                              child: Column(
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 10.0, vertical: 8.0),
-                                    child: Row(
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.all(24.0), // Increased padding
+                        child: logs.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  "No logs available",
+                                  style: TextStyle(
+                                      fontSize: 16, color: Colors.grey),
+                                ),
+                              )
+                            : SingleChildScrollView(
+                                child: Column(
+                                  children: [
+                                    Row(
                                       children: [
+                                        const SizedBox(height: 100),
                                         Expanded(
-                                          flex: 3,
-                                          child: Text(
-                                            "Action",
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.bold),
+                                          flex: 1,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                  color: Colors.grey.shade300),
+                                            ),
+                                            child: DropdownButtonHideUnderline(
+                                              child: DropdownButton2<String>(
+                                                value: selectedFilter,
+                                                items: filters.map((filter) {
+                                                  return DropdownMenuItem<
+                                                      String>(
+                                                    value: filter,
+                                                    child: Text(filter,
+                                                        style: const TextStyle(
+                                                            fontSize: 14)),
+                                                  );
+                                                }).toList(),
+                                                onChanged: (value) {
+                                                  if (value != null) {
+                                                    setState(() {
+                                                      selectedFilter = value;
+                                                      searchQuery = '';
+                                                      applyFilters();
+                                                    });
+                                                  }
+                                                },
+                                                buttonStyleData:
+                                                    ButtonStyleData(
+                                                  height: 40,
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 8),
+                                                  decoration: BoxDecoration(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                                dropdownStyleData:
+                                                    DropdownStyleData(
+                                                  maxHeight: 200,
+                                                  decoration: BoxDecoration(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                    color: Colors.white,
+                                                  ),
+                                                  scrollbarTheme:
+                                                      ScrollbarThemeData(
+                                                    radius:
+                                                        const Radius.circular(
+                                                            40),
+                                                    thickness:
+                                                        WidgetStateProperty
+                                                            .all(6),
+                                                    thumbVisibility:
+                                                        WidgetStateProperty
+                                                            .all(true),
+                                                  ),
+                                                ),
+                                                menuItemStyleData:
+                                                    const MenuItemStyleData(
+                                                  height: 40,
+                                                  padding: EdgeInsets.symmetric(
+                                                      horizontal: 8),
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
+                                        const SizedBox(width: 10),
                                         Expanded(
                                           flex: 2,
-                                          child: Text(
-                                            "Timestamp",
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.bold),
+                                          child: TextField(
+                                            onChanged: (value) {
+                                              setState(() {
+                                                searchQuery = value;
+                                                applyFilters();
+                                              });
+                                            },
+                                            decoration: InputDecoration(
+                                              hintText:
+                                                  "Search by $selectedFilter",
+                                              prefixIcon: const Icon(
+                                                  Icons.search,
+                                                  color: Colors.grey),
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                borderSide: BorderSide.none,
+                                              ),
+                                              filled: true,
+                                              fillColor: Colors.white,
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  const Divider(),
-                                  ...logs.map((log) {
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10.0,
-                                        vertical: 8.0,
-                                      ),
+                                    const SizedBox(height: 20),
+
+                                    //table section
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 10.0, vertical: 8.0),
                                       child: Row(
                                         children: [
                                           Expanded(
                                             flex: 3,
-                                            child: RichText(
-                                              text: TextSpan(
-                                                children: _highlightKeywords(
-                                                    log["action"]),
-                                                style: const TextStyle(
-                                                  color: Colors.black,
-                                                  fontSize: 14,
-                                                ),
-                                              ),
+                                            child: Text(
+                                              "Action",
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.bold),
                                             ),
                                           ),
                                           Expanded(
                                             flex: 2,
-                                            child: Center(
-                                              child: Text(
-                                                log["timestamp"],
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                ),
-                                              ),
+                                            child: Text(
+                                              "Timestamp",
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.bold),
                                             ),
                                           ),
                                         ],
                                       ),
-                                    );
-                                  }).toList(),
-                                ],
+                                    ),
+                                    const Divider(),
+                                    ...logs.map((log) {
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10.0,
+                                          vertical: 8.0,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 3,
+                                              child: RichText(
+                                                text: TextSpan(
+                                                  children: _highlightKeywords(
+                                                      log["action"]),
+                                                  style: const TextStyle(
+                                                    color: Colors.black,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Center(
+                                                child: Text(
+                                                  log["timestamp"],
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                  ],
+                                ),
                               ),
-                            ),
+                      ),
                     ),
                   ),
                 ),
@@ -454,6 +611,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       setState(() {
         logs = fetchedLogs;
+        filteredLogs = fetchedLogs;
       });
     } catch (e) {
       print("Error loading logs: $e");

@@ -12,7 +12,7 @@ import 'package:intl/intl.dart';
 class EditProfilePage extends StatefulWidget {
   final String telecomID;
 
-  const EditProfilePage({Key? key, required this.telecomID}) : super(key: key);
+  const EditProfilePage({super.key, required this.telecomID});
 
   @override
   _EditProfilePageState createState() => _EditProfilePageState();
@@ -54,7 +54,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       final file = input.files!.first;
 
       // Check file size (1MB = 1048576 bytes)
-      if (file.size! > 1048576) {
+      if (file.size > 1048576) {
         _showError('Image size must be less than 1MB');
         return;
       }
@@ -265,7 +265,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         backgroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, true),
         ),
         title: const Text(
           'Back to Profile Page',
@@ -378,11 +378,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           keyboardType: TextInputType.phone,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
-                              return 'Please enter your phone number';
+                              return 'Please enter the admin phone number';
                             }
-                            // Add phone number format validation if needed
-                            if (!RegExp(r'^\+?[\d\s-]+$').hasMatch(value)) {
-                              return 'Please enter a valid phone number';
+                            // Regex for Malaysian phone number
+                            final phoneRegex = RegExp(r'^\+601[0-9]{8,9}$');
+                            if (!phoneRegex.hasMatch(value)) {
+                              return 'Please enter a valid phone number (e.g., +601155050925)';
                             }
                             return null;
                           },

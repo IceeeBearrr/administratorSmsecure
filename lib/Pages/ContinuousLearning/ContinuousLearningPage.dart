@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:telecom_smsecure/Pages/ContinuousLearning/CompareVersion.dart';
 import 'package:telecom_smsecure/Pages/ContinuousLearning/LearnNewPatternPageOne%20.dart';
+import 'package:dropdown_button2/dropdown_button2.dart';
 
 class ContinuousLearningPage extends StatefulWidget {
-  const ContinuousLearningPage({Key? key}) : super(key: key);
+  const ContinuousLearningPage({super.key});
 
   @override
   State<ContinuousLearningPage> createState() => _ContinuousLearningPageState();
@@ -25,6 +26,18 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
     "Date-Time Learn",
     "Status",
   ];
+
+  // Map to convert display names to data field names
+  final Map<String, String> _filterToField = {
+    "Message Pattern": "pattern",
+    "Label": "label",
+    "Learned By": "learnedBy",
+    "Trained By": "trainedBy",
+    "Date-Time Learn": "dateTime",
+    "Status": "status",
+  };
+
+
 
   @override
   void initState() {
@@ -52,7 +65,6 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
 
         return {
           "id": doc.id, // Add document ID to the map
-
           "pattern": data['message'] ?? 'No Pattern',
           "label": data['label'] ?? 'No Label',
           "learnedBy": learnedBy, // Updated to handle lists
@@ -66,11 +78,27 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
       setState(() {
         _data = tempData;
         _filteredData = tempData;
+        _applyFilters(_searchController.text); // Apply initial filtering
       });
     } catch (e) {
       print("Error fetching data: $e");
     }
   }
+
+  void _applyFilters(String searchText) {
+    setState(() {
+      if (searchText.isEmpty) {
+        _filteredData = _data;
+      } else {
+        String fieldToSearch = _filterToField[_selectedFilter] ?? 'pattern';
+        _filteredData = _data.where((item) {
+          final valueToSearch = item[fieldToSearch]?.toString().toLowerCase() ?? '';
+          return valueToSearch.contains(searchText.toLowerCase());
+        }).toList();
+      }
+    });
+  }
+
 
   void _filterData(String searchText) {
     setState(() {
@@ -108,42 +136,69 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
             Row(
               children: [
                 // Dropdown with enhanced style
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedFilter,
-                      icon:
-                          const Icon(Icons.arrow_drop_down, color: Colors.grey),
-                      style: const TextStyle(color: Colors.black, fontSize: 16),
-                      items: _filterOptions.map((option) {
-                        return DropdownMenuItem<String>(
-                          value: option,
-                          child: Text(option),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _selectedFilter = value;
-                          });
-                        }
-                      },
+                Expanded(
+                  flex: 1,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton2<String>(
+                        value: _selectedFilter,
+                        items: _filterOptions.map((filter) {
+                          return DropdownMenuItem<String>(
+                            value: filter,
+                            child: Text(
+                              filter,
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _selectedFilter = value;
+                              _applyFilters(_searchController.text);
+                            });
+                          }
+                        },
+                        buttonStyleData: ButtonStyleData(
+                          height: 40,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                          ),
+                        ),
+                        dropdownStyleData: DropdownStyleData(
+                          maxHeight: 200,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                          ),
+                          scrollbarTheme: ScrollbarThemeData(
+                            radius: const Radius.circular(40),
+                            thickness: WidgetStateProperty.all(6),
+                            thumbVisibility: WidgetStateProperty.all(true),
+                          ),
+                        ),
+                        menuItemStyleData: const MenuItemStyleData(
+                          height: 40,
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Search bar
-                SizedBox(
-                  width: 700,
+                Expanded(
+                  flex: 4,
                   child: TextField(
                     controller: _searchController,
-                    onChanged: _filterData,
+                    onChanged: _applyFilters,
                     decoration: InputDecoration(
                       hintText: "Search by $_selectedFilter",
                       prefixIcon: const Icon(Icons.search, color: Colors.grey),
@@ -156,24 +211,20 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
                     ),
                   ),
                 ),
-                const Spacer(),
-                // Learn New Pattern button
+                const SizedBox(width: 10),
                 ElevatedButton(
                   onPressed: () async {
-                    // Navigate to LearnNewPatternPageOne and refresh when returning
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => const LearnNewPatternPageOne(),
                       ),
                     );
-                    // Refresh data when returning
                     fetchData();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00A991),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                   ),
