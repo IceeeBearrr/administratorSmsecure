@@ -666,7 +666,7 @@ class _PredictionModelPageState extends State<PredictionModelPage> {
                   fontSize: 12,
                 ),
                 cellAlignment: pw.Alignment.centerLeft,
-                headerDecoration: pw.BoxDecoration(
+                headerDecoration: const pw.BoxDecoration(
                   color: PdfColors.grey200,
                 ),
                 cellPadding: const pw.EdgeInsets.all(8),

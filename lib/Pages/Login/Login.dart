@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:mailer/smtp_server.dart';
 import 'package:http/http.dart' as http;
 
 class TelecomLogin extends StatefulWidget {

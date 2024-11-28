@@ -13,9 +13,9 @@ class CompareVersion extends StatefulWidget {
   final String messagePatternId;
 
   const CompareVersion({
-    Key? key,
+    super.key,
     required this.messagePatternId,
-  }) : super(key: key);
+  });
 
   @override
   State<CompareVersion> createState() => _CompareVersionState();
@@ -133,7 +133,7 @@ class _CompareVersionState extends State<CompareVersion> {
         Duration smallestGap = const Duration(days: 365);
         for (var doc in allMetricsQuery.docs) {
           DateTime docTimestamp = (doc.get('timestamp') as Timestamp).toDate();
-          if (docTimestamp.isBefore(currentTimestamp!)) {
+          if (docTimestamp.isBefore(currentTimestamp)) {
             Duration gap = currentTimestamp.difference(docTimestamp);
             if (gap < smallestGap) {
               smallestGap = gap;
@@ -579,7 +579,7 @@ class _CompareVersionState extends State<CompareVersion> {
     }
 
     // Helper function to create metric rows - Move this BEFORE using it
-    pw.TableRow _buildPdfMetricRow(String metric, double? previousValue,
+    pw.TableRow buildPdfMetricRow(String metric, double? previousValue,
         double currentValue, pw.Font ttf) {
       return pw.TableRow(
         children: [
@@ -667,7 +667,7 @@ class _CompareVersionState extends State<CompareVersion> {
                 children: [
                   // Header row
                   pw.TableRow(
-                    decoration: pw.BoxDecoration(
+                    decoration: const pw.BoxDecoration(
                       color: PdfColors.grey200,
                     ),
                     children: [
@@ -693,24 +693,24 @@ class _CompareVersionState extends State<CompareVersion> {
                     ],
                   ),
                   // Metrics rows
-                  _buildPdfMetricRow(
+                  buildPdfMetricRow(
                       'Training Accuracy',
                       previousMetrics?['trainAccuracy'],
                       currentMetrics['trainAccuracy'],
                       ttf),
-                  _buildPdfMetricRow(
+                  buildPdfMetricRow(
                       'Test Accuracy',
                       previousMetrics?['testAccuracy'],
                       currentMetrics['testAccuracy'],
                       ttf),
-                  _buildPdfMetricRow(
+                  buildPdfMetricRow(
                       'Precision',
                       previousMetrics?['testPrecision'],
                       currentMetrics['testPrecision'],
                       ttf),
-                  _buildPdfMetricRow('Recall', previousMetrics?['testRecall'],
+                  buildPdfMetricRow('Recall', previousMetrics?['testRecall'],
                       currentMetrics['testRecall'], ttf),
-                  _buildPdfMetricRow(
+                  buildPdfMetricRow(
                       'F1 Score',
                       previousMetrics?['testF1Score'],
                       currentMetrics['testF1Score'],
@@ -910,7 +910,7 @@ class _CompareVersionState extends State<CompareVersion> {
       ),
       border: pw.TableBorder.all(color: PdfColors.grey400),
       cellAlignment: pw.Alignment.center,
-      headerDecoration: pw.BoxDecoration(
+      headerDecoration: const pw.BoxDecoration(
         color: PdfColors.grey200,
       ),
       cellPadding: const pw.EdgeInsets.all(8),

@@ -12,11 +12,11 @@ class SpamMessagePage extends StatefulWidget {
   final String conversationWith;
 
   const SpamMessagePage({
-    Key? key,
+    super.key,
     required this.conversationID,
     required this.spamContactID,
     required this.conversationWith,
-  }) : super(key: key);
+  });
 
   @override
   _SpamMessagePageState createState() => _SpamMessagePageState();
@@ -251,10 +251,10 @@ class _SpamMessagePageState extends State<SpamMessagePage> {
       ),
       items: [
         PopupMenuItem(
-          child: ListTile(
-            leading: const Icon(Icons.warning_amber_rounded,
+          child: const ListTile(
+            leading: Icon(Icons.warning_amber_rounded,
                 color: Color(0xFFFF4444)),
-            title: const Text('View Spam Details'),
+            title: Text('View Spam Details'),
             contentPadding: EdgeInsets.zero,
           ),
           onTap: () {
@@ -283,15 +283,15 @@ class _SpamMessagePageState extends State<SpamMessagePage> {
           backgroundColor: Colors.white,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: Column(
+          title: const Column(
             children: [
-              const Icon(
+              Icon(
                 Icons.warning_amber_rounded,
                 color: Color(0xFFFF4444),
                 size: 48,
               ),
-              const SizedBox(height: 8),
-              const Text(
+              SizedBox(height: 8),
+              Text(
                 "Spam Message Details",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
@@ -428,9 +428,9 @@ class _SpamMessagePageState extends State<SpamMessagePage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(
+                  const CircularProgressIndicator(
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      const Color(0xFF113953),
+                      Color(0xFF113953),
                     ),
                   ),
                   const SizedBox(height: 16),

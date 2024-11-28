@@ -7,7 +7,7 @@ import 'package:telecom_smsecure/Pages/User/UserSpamMessage.dart';
 class UserShowDetail extends StatefulWidget {
   final String phoneNo;
 
-  const UserShowDetail({Key? key, required this.phoneNo}) : super(key: key);
+  const UserShowDetail({super.key, required this.phoneNo});
 
   @override
   _UserShowDetailState createState() => _UserShowDetailState();
@@ -563,7 +563,7 @@ class _UserShowDetailState extends State<UserShowDetail> {
                                   ],
                                 ),
                               );
-                            }).toList(),
+                            }),
                           ],
                         ),
                       ),
