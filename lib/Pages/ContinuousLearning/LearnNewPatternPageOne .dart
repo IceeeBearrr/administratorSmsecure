@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:dropdown_button2/dropdown_button2.dart';
 
 class LearnNewPatternPageOne extends StatefulWidget {
   const LearnNewPatternPageOne({super.key});
@@ -258,29 +259,52 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
             },
           ),
           const SizedBox(height: 20),
-          DropdownButtonFormField<String>(
-            decoration: InputDecoration(
-              labelText: "Label",
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            items: ["Spam", "Ham"]
-                .map((label) => DropdownMenuItem<String>(
-                      value: label,
-                      child: Text(label),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              selectedLabel = value;
-            },
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return "Label cannot be empty";
-              }
-              return null;
-            },
-          ),
+
+DropdownButtonFormField2<String>(
+  decoration: const InputDecoration(
+    contentPadding: EdgeInsets.zero,
+    border: InputBorder.none, // Removes the default text field border
+  ),
+  isExpanded: true, // Expands the dropdown to fill the available width
+  hint: const Text(
+    'Select a label',
+    style: TextStyle(fontSize: 16),
+  ),
+  items: ["Spam", "Ham"]
+      .map((label) => DropdownMenuItem<String>(
+            value: label,
+            child: Text(label),
+          ))
+      .toList(),
+  onChanged: (value) {
+    selectedLabel = value;
+  },
+  validator: (value) {
+    if (value == null || value.isEmpty) {
+      return "Label cannot be empty";
+    }
+    return null;
+  },
+  buttonStyleData: ButtonStyleData(
+    height: 60,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(
+        color: const Color.fromARGB(255, 121, 116, 126), // Updated border color
+      ),
+      color: Colors.white, // Ensures that the dropdown background remains white
+    ),
+  ),
+  dropdownStyleData: DropdownStyleData(
+    maxHeight: 200,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(10),
+      color: Colors.white, // Keeps the dropdown background color white
+    ),
+  ),
+),
+
           const SizedBox(height: 20),
           TextField(
             controller: _reasonController,

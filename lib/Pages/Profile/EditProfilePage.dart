@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:image_picker_web/image_picker_web.dart';
-import 'package:image/image.dart' as img;
 import 'dart:html' as html;
 import 'package:crop/crop.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';

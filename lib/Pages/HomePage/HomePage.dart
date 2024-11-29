@@ -1,8 +1,17 @@
+import 'dart:io';
 import 'dart:math';
-
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/rendering.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'package:screenshot/screenshot.dart';
+import 'dart:html' as html;
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -23,6 +32,8 @@ class _HomepageState extends State<Homepage> {
   String? selectedUser; // Track selected malicious user
   int totalSpamMessages = 0;
   double spamMessagePercentageChange = 0;
+  final screenshotController = ScreenshotController();
+  final GlobalKey chartKey = GlobalKey();
 
   @override
   void initState() {
@@ -262,8 +273,10 @@ class _HomepageState extends State<Homepage> {
               },
             ),
           ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
         borderData: FlBorderData(
           show: true,
@@ -800,6 +813,241 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
+  Future<void> _downloadPDFReport(String section) async {
+    try {
+      setState(() => isLoading = true);
+
+      // Capture the widget using RenderRepaintBoundary
+      final RenderRepaintBoundary boundary =
+          chartKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      final Uint8List? chartImage = byteData?.buffer.asUint8List();
+
+      if (chartImage == null) {
+        throw Exception('Failed to capture chart');
+      }
+
+      // Create PDF document
+      final pdf = pw.Document();
+
+      // Add content to the PDF
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'Spam Detection Analytics Report',
+                  style: pw.TextStyle(
+                      fontSize: 24, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.SizedBox(height: 20),
+                pw.Text('Generated on: ${DateTime.now()}'),
+                pw.SizedBox(height: 40),
+                pw.Center(
+                  child: pw.Image(
+                    pw.MemoryImage(chartImage),
+                    fit: pw.BoxFit.contain,
+                    width: 500,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      // Save PDF as a Uint8List
+      final Uint8List pdfBytes = await pdf.save();
+
+      // Download PDF in Web
+      final blob = html.Blob([pdfBytes]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..target = 'blank'
+        ..download = 'spam_detection_report_$section.pdf'
+        ..click();
+      html.Url.revokeObjectUrl(url);
+
+      setState(() => isLoading = false);
+    } catch (e) {
+      debugPrint('Error generating PDF: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  Widget _buildChartContainer() {
+    return RepaintBoundary(
+      key: chartKey,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 5,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (selectedView == 'prediction') ...[
+              _buildSectionHeader("Top Prediction Model", "prediction"),
+              const SizedBox(height: 60),
+              _buildPredictionModelChart(),
+            ],
+            if (selectedView == 'spam') ...[
+              _buildSectionHeader("Top 5 Keywords", "spam"),
+              const SizedBox(height: 60),
+              _buildSpamAnalyticsCharts(),
+            ],
+            if (selectedView == 'malicious') ...[
+              _buildSectionHeader("Top Malicious User", "malicious"),
+              const SizedBox(height: 60),
+              SizedBox(height: 300, child: _buildBarChart()),
+              if (selectedUser != null)
+                SizedBox(height: 300, child: _buildConversationBarChart()),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _buildPDFSectionContent(String section) {
+    switch (section) {
+      case 'malicious':
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Malicious Users Analysis',
+              style: pw.TextStyle(
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text(
+              'Total Malicious Users: $totalMaliciousUsers',
+              style: const pw.TextStyle(fontSize: 14),
+            ),
+            pw.Text(
+              'Change from Previous Period: ${percentageChange.toStringAsFixed(1)}%',
+              style: const pw.TextStyle(fontSize: 14),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text(
+              'Top Users Breakdown:',
+              style: const pw.TextStyle(fontSize: 14),
+            ),
+            ...topUsers.take(10).map((user) => pw.Text(
+                  '${user.key}: ${user.value} incidents',
+                  style: const pw.TextStyle(fontSize: 12),
+                )),
+          ],
+        );
+      case 'prediction':
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Prediction Model Performance',
+              style: pw.TextStyle(
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text(
+              'Model Accuracy and Performance Metrics',
+              style: const pw.TextStyle(fontSize: 14),
+            ),
+          ],
+        );
+      case 'spam':
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Spam Messages Analysis',
+              style: pw.TextStyle(
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text(
+              'Total Spam Messages: $totalSpamMessages',
+              style: const pw.TextStyle(fontSize: 14),
+            ),
+            pw.Text(
+              'Change from Previous Period: ${spamMessagePercentageChange.toStringAsFixed(1)}%',
+              style: const pw.TextStyle(fontSize: 14),
+            ),
+          ],
+        );
+      default:
+        return pw.Container();
+    }
+  }
+
+  Widget _buildSectionHeader(String title, String section) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.blue.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.picture_as_pdf,
+                    size: 18,
+                    color: Colors.blue,
+                  ),
+                  const SizedBox(width: 6),
+                  TextButton(
+                    onPressed: () => _downloadPDFReport(section),
+                    child: const Text(
+                      'Download Report',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildSpamAnalyticsCharts() {
     return FutureBuilder<Map<String, dynamic>>(
       future: Future.wait([
@@ -981,64 +1229,7 @@ class _HomepageState extends State<Homepage> {
                     const SizedBox(height: 24),
 
                     // Chart Section
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.1),
-                            spreadRadius: 1,
-                            blurRadius: 5,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (selectedView == 'prediction') ...[
-                            const Text(
-                              "Top Prediction Model",
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 60),
-                            _buildPredictionModelChart(), // Display the prediction model charts
-                          ],
-                          if (selectedView == 'spam') ...[
-                            const Text(
-                              "Top 5 Keywords",
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 60),
-                            _buildSpamAnalyticsCharts(),
-                          ],
-                          if (selectedView == 'malicious') ...[
-                            const Text(
-                              "Top Malicious User",
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 60),
-                            SizedBox(height: 300, child: _buildBarChart()),
-                            const SizedBox(height: 24),
-                            if (selectedUser != null)
-                              SizedBox(
-                                  height: 300,
-                                  child: _buildConversationBarChart()),
-                          ],
-                        ],
-                      ),
-                    ),
+                    _buildChartContainer(),
                   ],
                 ),
               ),

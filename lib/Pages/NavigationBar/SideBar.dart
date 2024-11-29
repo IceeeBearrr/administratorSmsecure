@@ -70,7 +70,8 @@ class SideBar extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.settings),
             title: const Text("Settings"),
-            onTap: () {},
+            selected: selectedIndex == 5,
+            onTap: () => onTabSelected(5),          
           ),
           ListTile(
             leading: const Icon(Icons.logout),

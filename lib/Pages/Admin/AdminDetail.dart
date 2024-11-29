@@ -91,7 +91,7 @@ class _AdminDetailPageState extends State<AdminDetailPage> {
 
         // Convert the filter logic to lowercase to handle case insensitivity
         if (selectedFilter?.toLowerCase() == 'prediction model') {
-          matchesFilter = action.contains('add and learn');
+          matchesFilter = action.contains('and learn');
         } else if (selectedFilter?.toLowerCase() == 'download') {
           matchesFilter = action.startsWith('download');
         } else if (selectedFilter?.toLowerCase() == 'ban user') {
@@ -101,8 +101,8 @@ class _AdminDetailPageState extends State<AdminDetailPage> {
         }
 
         // Ensure search query matching is case-insensitive
-        bool matchesSearch =
-            searchQuery.isEmpty || action.contains(searchQuery.toLowerCase());
+        bool matchesSearch = searchQuery.isEmpty ||
+            action.contains(searchQuery.toLowerCase());
 
         return matchesFilter && matchesSearch;
       }).toList();
@@ -158,11 +158,13 @@ class _AdminDetailPageState extends State<AdminDetailPage> {
                     CircleAvatar(
                       radius: 50,
                       backgroundColor: Colors.grey[300],
-                      backgroundImage: adminDetails?['profileImageUrl'] != null
+                      backgroundImage: (adminDetails?['profileImageUrl'] != null &&
+                              adminDetails!['profileImageUrl'] != "")
                           ? MemoryImage(
                               base64Decode(adminDetails!['profileImageUrl']))
                           : null,
-                      child: adminDetails?['profileImageUrl'] == null
+                      child: (adminDetails?['profileImageUrl'] == null ||
+                              adminDetails!['profileImageUrl'] == "")
                           ? const Icon(Icons.person,
                               size: 50, color: Colors.white)
                           : null,

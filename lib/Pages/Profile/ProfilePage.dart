@@ -32,6 +32,7 @@ class _ProfilePageState extends State<ProfilePage> {
     'Prediction Model',
     'Download',
     'Ban User',
+    'Add Admin'
   ];
 
   @override
@@ -71,17 +72,22 @@ class _ProfilePageState extends State<ProfilePage> {
   void applyFilters() {
     setState(() {
       filteredLogs = logs.where((log) {
-        final action = log['action'].toLowerCase();
+        final action = log['action']
+            .toLowerCase(); // Convert to lowercase for case-insensitive matching
         bool matchesFilter = false;
 
+        // Filter logic to match the selected filter
         if (selectedFilter?.toLowerCase() == 'prediction model') {
-          matchesFilter = action.contains('add and learn');
+          matchesFilter = action.contains('and learn');
         } else if (selectedFilter?.toLowerCase() == 'download') {
-          matchesFilter = action.startsWith('download');
+          matchesFilter = action.contains('download');
         } else if (selectedFilter?.toLowerCase() == 'ban user') {
-          matchesFilter = action.startsWith('banned');
+          matchesFilter = action.contains('banned');
+        } else if (selectedFilter?.toLowerCase() == 'add admin') {
+          matchesFilter = action.contains('admin');
         }
 
+        // Search query logic to match substrings anywhere in the action
         bool matchesSearch =
             searchQuery.isEmpty || action.contains(searchQuery.toLowerCase());
 
@@ -415,11 +421,11 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         const Radius.circular(
                                                             40),
                                                     thickness:
-                                                        WidgetStateProperty
-                                                            .all(6),
+                                                        WidgetStateProperty.all(
+                                                            6),
                                                     thumbVisibility:
-                                                        WidgetStateProperty
-                                                            .all(true),
+                                                        WidgetStateProperty.all(
+                                                            true),
                                                   ),
                                                 ),
                                                 menuItemStyleData:
@@ -463,6 +469,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     const SizedBox(height: 20),
 
                                     //table section
+
                                     const Padding(
                                       padding: EdgeInsets.symmetric(
                                           horizontal: 10.0, vertical: 8.0),
@@ -489,7 +496,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       ),
                                     ),
                                     const Divider(),
-                                    ...logs.map((log) {
+                                    ...filteredLogs.map((log) {
                                       return Padding(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 10.0,

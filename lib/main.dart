@@ -9,9 +9,10 @@ import 'package:telecom_smsecure/Pages/HomePage/HomePage.dart';
 import 'package:telecom_smsecure/Pages/Login/Login.dart';
 import 'package:telecom_smsecure/Pages/PredictionModel/PredictionModelPage.dart';
 import 'package:telecom_smsecure/Pages/ContinuousLearning/ContinuousLearningPage.dart';
+import 'package:telecom_smsecure/Pages/Settings/Settings.dart';
 import 'package:telecom_smsecure/Pages/User/User.dart';
-import 'package:telecom_smsecure/Pages/User/UserShowDetail.dart';
 import 'package:telecom_smsecure/firebase_options.dart';
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +33,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+        scaffoldMessengerKey: scaffoldMessengerKey,
+
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         scaffoldBackgroundColor: const Color.fromARGB(255, 255, 255, 255),
@@ -74,6 +77,7 @@ class MainAppState extends State<MainApp> {
     const Userpage(),
     const PredictionModelPage(),
     const ContinuousLearningPage(),
+    const SettingsPage(),
   ];
 
   @override

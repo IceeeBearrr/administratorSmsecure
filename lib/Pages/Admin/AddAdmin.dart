@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
@@ -21,10 +20,15 @@ class _AddAdminPageState extends State<AddAdminPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _genderController = TextEditingController();
   final TextEditingController _birthdayController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   final List<String> genderItems = ['Male', 'Female'];
   DateTime? selectedDate;
   String? profileImageBase64;
+  bool _passwordVisible = false;
+  bool _confirmPasswordVisible = false;
 
   Future<void> _addAdmin() async {
     if (_formKey.currentState!.validate()) {
@@ -59,7 +63,7 @@ class _AddAdminPageState extends State<AddAdminPage> {
           'gender': _genderController.text,
           'birthday': _birthdayController.text,
           'profileImageUrl': profileImageBase64 ?? '', // Placeholder image
-          'role': 'admin', // Default role for new admin
+          'password': _passwordController.text,
           'createdAt': FieldValue.serverTimestamp(),
         };
 
@@ -187,6 +191,85 @@ class _AddAdminPageState extends State<AddAdminPage> {
                   _buildGenderDropdown(),
                   const SizedBox(height: 10),
                   _buildDatePicker(),
+
+                  const SizedBox(height: 10),
+
+                  _buildEditableField(
+                    "Password",
+                    _passwordController,
+                    prefixIcon:
+                        const Icon(Icons.lock, color: Color(0xFF113953)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _passwordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off, // Eye icon logic
+                        color: Color(0xFF113953), // Eye icon color
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _passwordVisible =
+                              !_passwordVisible; // Toggle password visibility
+                        });
+                      },
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter a password';
+                      }
+                      if (value.length < 8) {
+                        return 'Password must be at least 8 characters';
+                      }
+                      if (!RegExp(r'[A-Z]').hasMatch(value)) {
+                        return 'Password must contain at least one uppercase letter';
+                      }
+                      if (!RegExp(r'[a-z]').hasMatch(value)) {
+                        return 'Password must contain at least one lowercase letter';
+                      }
+                      if (!RegExp(r'[0-9]').hasMatch(value)) {
+                        return 'Password must contain at least one digit';
+                      }
+                      if (!RegExp(r'[!@#$%^&*(),.?":{}|<>_]').hasMatch(value)) {
+                        return 'Password must contain at least one special character';
+                      }
+                      return null;
+                    },
+                    obscureText:
+                        !_passwordVisible, // Control visibility of text
+                  ),
+                  const SizedBox(height: 10),
+                  _buildEditableField(
+                    "Confirm Password",
+                    _confirmPasswordController,
+                    prefixIcon:
+                        const Icon(Icons.lock, color: Color(0xFF113953)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _confirmPasswordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off, // Eye icon logic
+                        color: Color(0xFF113953), // Eye icon color
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _confirmPasswordVisible =
+                              !_confirmPasswordVisible; // Toggle confirm password visibility
+                        });
+                      },
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please confirm your password';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
+                    obscureText:
+                        !_confirmPasswordVisible, // Control visibility of text
+                  ),
+
                   const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: _addAdmin,
@@ -215,9 +298,12 @@ class _AddAdminPageState extends State<AddAdminPage> {
     String label,
     TextEditingController controller, {
     Icon? prefixIcon,
+    Widget? suffixIcon, // Add suffixIcon parameter
+
     bool readOnly = false,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    bool obscureText = false, // Add this parameter
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,6 +317,7 @@ class _AddAdminPageState extends State<AddAdminPage> {
           controller: controller,
           readOnly: readOnly,
           keyboardType: keyboardType,
+          obscureText: obscureText, // Pass it to TextFormField
           style: const TextStyle(color: Color.fromARGB(188, 0, 0, 0)),
           decoration: InputDecoration(
             contentPadding:
@@ -239,6 +326,8 @@ class _AddAdminPageState extends State<AddAdminPage> {
               borderRadius: BorderRadius.circular(8),
             ),
             prefixIcon: prefixIcon,
+            suffixIcon: suffixIcon, // Ensure this is set
+
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(color: Colors.grey.shade300),

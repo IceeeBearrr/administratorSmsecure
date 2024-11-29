@@ -272,18 +272,24 @@ class _AdministratorPageState extends State<AdministratorPage> {
               color: const Color(0xFFF5F5F5),
               child: const Row(
                 children: [
-                  Expanded(flex: 2, child: Text("ID")),
-                  Expanded(flex: 2, child: Text("Name")),
-                  Expanded(flex: 2, child: Text("Email Address")),
+                  Expanded(flex: 2, child: Text("ID",
+                                      style: TextStyle(fontWeight: FontWeight.bold))),
+                  Expanded(flex: 2, child: Text("Name",
+                                      style: TextStyle(fontWeight: FontWeight.bold))),
+                  Expanded(flex: 2, child: Text("Email Address",
+                                      style: TextStyle(fontWeight: FontWeight.bold))),
                   Expanded(
                       flex: 2,
                       child:
-                          Text("No. of Actions", textAlign: TextAlign.center)),
-                  Expanded(flex: 4, child: Text("Latest Action")),
+                          Text("No. of Actions", textAlign: TextAlign.center,
+                                      style: TextStyle(fontWeight: FontWeight.bold))),
+                  Expanded(flex: 4, child: Text("Latest Action",
+                                      style: TextStyle(fontWeight: FontWeight.bold))),
                   Expanded(
                       flex: 1,
                       child:
-                          Text("Active Status", textAlign: TextAlign.center)),
+                          Text("Active Status", textAlign: TextAlign.center,
+                                      style: TextStyle(fontWeight: FontWeight.bold))),
                   Expanded(flex: 1, child: Text("")),
                 ],
               ),

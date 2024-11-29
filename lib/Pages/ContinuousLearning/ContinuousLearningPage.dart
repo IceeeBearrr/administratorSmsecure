@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:telecom_smsecure/Pages/ContinuousLearning/CompareVersion.dart';
+import 'package:telecom_smsecure/Pages/ContinuousLearning/ContinuousLearningException.dart';
+import 'package:telecom_smsecure/Pages/ContinuousLearning/ContinuousLearningInProgress.dart';
 import 'package:telecom_smsecure/Pages/ContinuousLearning/LearnNewPatternPageOne%20.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 
@@ -37,7 +39,50 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
     "Status": "status",
   };
 
+  Stream<List<Map<String, dynamic>>> _getFilteredDataStream() {
+    return _firestore
+        .collection('messagePattern')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      final docs = snapshot.docs;
 
+      // Map Firestore data to the format expected by your UI
+      final allData = docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final timestamp = data['timestamp'] != null
+            ? (data['timestamp'] as Timestamp).toDate()
+            : DateTime.now();
+
+        String learnedBy = data['learnedBy'] is List
+            ? (data['learnedBy'] as List<dynamic>).join(', ')
+            : data['learnedBy'] ?? 'Unknown';
+
+        return {
+          "id": doc.id,
+          "pattern": data['message'] ?? 'No Pattern',
+          "label": data['label'] ?? 'No Label',
+          "learnedBy": learnedBy,
+          "trainedBy": data['trainedBy'] ?? 'Unknown',
+          "dateTime":
+              "${timestamp.day}-${timestamp.month}-${timestamp.year} ${timestamp.hour}:${timestamp.minute}",
+          "status": data['status'] ?? 'Unknown',
+        };
+      }).toList();
+
+      // Apply filtering based on search text and selected filter
+      if (_searchController.text.isNotEmpty) {
+        final fieldToSearch = _filterToField[_selectedFilter] ?? 'pattern';
+        return allData.where((item) {
+          final valueToSearch =
+              item[fieldToSearch]?.toString().toLowerCase() ?? '';
+          return valueToSearch.contains(_searchController.text.toLowerCase());
+        }).toList();
+      }
+
+      return allData;
+    });
+  }
 
   @override
   void initState() {
@@ -92,13 +137,13 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
       } else {
         String fieldToSearch = _filterToField[_selectedFilter] ?? 'pattern';
         _filteredData = _data.where((item) {
-          final valueToSearch = item[fieldToSearch]?.toString().toLowerCase() ?? '';
+          final valueToSearch =
+              item[fieldToSearch]?.toString().toLowerCase() ?? '';
           return valueToSearch.contains(searchText.toLowerCase());
         }).toList();
       }
     });
   }
-
 
   void _filterData(String searchText) {
     setState(() {
@@ -198,7 +243,9 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
                   flex: 4,
                   child: TextField(
                     controller: _searchController,
-                    onChanged: _applyFilters,
+                    onChanged: (text) {
+                      setState(() {}); // Trigger UI update for live filtering
+                    },
                     decoration: InputDecoration(
                       hintText: "Search by $_selectedFilter",
                       prefixIcon: const Icon(Icons.search, color: Colors.grey),
@@ -224,7 +271,8 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00A991),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                   ),
@@ -238,6 +286,7 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
 
             const SizedBox(height: 20),
             // Data Table
+
             Expanded(
               child: Container(
                 padding: const EdgeInsets.all(10.0),
@@ -253,111 +302,173 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
                     ),
                   ],
                 ),
-                child: ListView(
-                  children: [
-                    // Table Headers
-                    const Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                              flex: 3,
-                              child: Text("Message Pattern",
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(
-                              flex: 1,
-                              child: Text("Label",
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(
-                              flex: 3,
-                              child: Text("Learned By",
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(
-                              flex: 1,
-                              child: Text("Trained By",
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(
-                              flex: 1,
-                              child: Text("Date - Time Learn",
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(
-                              flex: 1,
-                              child: Text("Status",
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold))),
-                          Expanded(flex: 1, child: Text("")),
-                        ],
-                      ),
-                    ),
-                    const Divider(),
-                    // Data Rows
-                    ..._filteredData.map((item) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10.0, vertical: 8.0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                                flex: 3, child: Text(item["pattern"] ?? "")),
-                            Expanded(flex: 1, child: Text(item["label"] ?? "")),
-                            Expanded(
-                                flex: 3, child: Text(item["learnedBy"] ?? "")),
-                            Expanded(
-                                flex: 1, child: Text(item["trainedBy"] ?? "")),
-                            Expanded(
-                                flex: 1, child: Text(item["dateTime"] ?? "")),
-                            Expanded(
-                              flex: 1,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 4, horizontal: 8),
-                                decoration: BoxDecoration(
-                                  color: item["status"] == "Complete"
-                                      ? Colors.green
-                                      : item["status"] == "Learning in Progress"
-                                          ? Colors.yellow
-                                          : Colors.red,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  item["status"] ?? "",
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold),
+                child: StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: _getFilteredDataStream(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      return const Center(child: Text("No data found"));
+                    }
+
+                    final realTimeData = snapshot.data!;
+
+                    return ListView(
+                      children: [
+                        // Table Headers
+                        const Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 10.0, vertical: 8.0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                  flex: 3,
+                                  child: Text("Message Pattern",
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                              Expanded(
+                                  flex: 1,
+                                  child: Text("Label",
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                              Expanded(
+                                  flex: 3,
+                                  child: Text("Learned By",
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                              Expanded(
+                                  flex: 1,
+                                  child: Text("Trained By",
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                              Expanded(
+                                  flex: 1,
+                                  child: Text("Date - Time Learn",
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold))),
+                              Expanded(
+                                flex: 1,
+                                child: Center(
+                                  child: Text(
+                                    "Status",
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              flex: 1,
-                              child: Center(
-                                child: IconButton(
-                                  icon: const Icon(Icons.more_vert,
-                                      color: Colors.grey),
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => CompareVersion(
-                                          messagePatternId: item[
-                                              "id"], // Pass the document ID
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ],
+                              Expanded(flex: 1, child: Text("")),
+                            ],
+                          ),
                         ),
-                      );
-                    }),
-                  ],
+                        const Divider(),
+
+                        // Table Rows
+                        ...realTimeData.map((item) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10.0, vertical: 8.0),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                    flex: 3,
+                                    child: Text(item["pattern"] ?? "")),
+                                Expanded(
+                                    flex: 1, child: Text(item["label"] ?? "")),
+                                Expanded(
+                                    flex: 3,
+                                    child: Text(item["learnedBy"] ?? "")),
+                                Expanded(
+                                    flex: 1,
+                                    child: Text(item["trainedBy"] ?? "")),
+                                Expanded(
+                                    flex: 1,
+                                    child: Text(item["dateTime"] ?? "")),
+                                Expanded(
+                                  flex: 1,
+                                  child: Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 4, horizontal: 8),
+                                      decoration: BoxDecoration(
+                                        color: item["status"] == "Complete"
+                                            ? Colors.green
+                                            : item["status"] ==
+                                                    "Learning in Progress"
+                                                ? Colors.yellow
+                                                : Colors.red,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        item["status"] ?? "",
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 1,
+                                  child: Center(
+                                    child: item["status"] ==
+                                            "Learning in Progress"
+                                        ? IconButton(
+                                            icon: const Icon(Icons.more_vert,
+                                                color: Colors.grey),
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      ContinuousLearningInProgress(
+                                                    messagePatternId:
+                                                        item["id"],
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          )
+                                        : IconButton(
+                                            icon: const Icon(Icons.more_vert,
+                                                color: Colors.grey),
+                                            onPressed: () {
+                                              if (item["status"] ==
+                                                  "Exception Found") {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        ContinuousLearningException(
+                                                      messagePatternId:
+                                                          item["id"],
+                                                    ),
+                                                  ),
+                                                );
+                                              } else {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        CompareVersion(
+                                                      messagePatternId:
+                                                          item["id"],
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                          ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),

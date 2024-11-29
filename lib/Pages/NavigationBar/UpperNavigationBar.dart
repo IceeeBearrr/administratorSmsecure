@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:intl/intl.dart'; // For timestamp formatting
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:telecom_smsecure/Pages/NavigationBar/WebNotificationService.dart';
 import 'package:telecom_smsecure/Pages/Profile/ProfilePage.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -28,14 +30,83 @@ class _CustomNavigationBarState extends State<CustomNavigationBar> {
   int _unreadNotificationsCount = 0;
   bool _doNotDisturb = false;
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  final webNotificationService = WebNotificationService();
+  StreamSubscription? _notificationStreamSubscription;
 
   @override
   void initState() {
     super.initState();
+    webNotificationService.initialize();
+    webNotificationService.startNotificationListener();
     _initializeFirebaseMessaging();
     _fetchUserData();
-    _fetchNotifications();
+    _fetchDoNotDisturbStatus(); // Add this line
+    _setupNotificationListener(); // Add this instead of _fetchNotifications()
   }
+
+  @override
+  void dispose() {
+    _notificationStreamSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _setupNotificationListener() {
+    // Cancel any existing subscription
+    _notificationStreamSubscription?.cancel();
+
+    // Set up real-time listener
+    _notificationStreamSubscription = FirebaseFirestore.instance
+        .collection('notification')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .listen((snapshot) async {
+      final telecomID = await _secureStorage.read(key: 'telecomID');
+      if (telecomID == null) return;
+
+      final notifications = snapshot.docs
+          .map((doc) => {
+                'adminName': doc['adminName'],
+                'content': doc['content'],
+                'timestamp': doc['timestamp'],
+                'seenBy': List<dynamic>.from(doc['seenBy'] ?? []),
+              })
+          .toList();
+
+      int unreadCount = notifications
+          .where((notification) =>
+              !(notification['seenBy'] as List<dynamic>).contains(telecomID))
+          .length;
+
+      setState(() {
+        _notifications = notifications;
+        _unreadNotificationsCount = unreadCount;
+      });
+    });
+  }
+
+Future<void> _fetchDoNotDisturbStatus() async {
+  try {
+    final telecomID = await _secureStorage.read(key: 'telecomID');
+    if (telecomID == null) {
+      debugPrint("telecomID is null");
+      return;
+    }
+
+    QuerySnapshot snapshot = await FirebaseFirestore.instance
+        .collection('telecommunicationsAdmin')
+        .where('telecomID', isEqualTo: telecomID)
+        .get();
+
+    if (snapshot.docs.isNotEmpty) {
+      bool doNotDisturb = snapshot.docs.first.get('doNotDisturb') ?? false;
+      setState(() {
+        _doNotDisturb = doNotDisturb;
+      });
+    }
+  } catch (e) {
+    debugPrint('Error fetching do not disturb status: $e');
+  }
+}
 
   Future<void> _fetchUserData() async {
     try {
@@ -71,70 +142,61 @@ class _CustomNavigationBarState extends State<CustomNavigationBar> {
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        // Always fetch notifications to update the UI, but only show if DND is off
         if (!_doNotDisturb) {
           _handleNewNotification(message);
+        } else {
+          debugPrint(
+              'Do Not Disturb is enabled - skipping notification handling');
         }
       });
     }
   }
 
   void _handleNewNotification(RemoteMessage message) {
-    _fetchNotifications(); // Refresh notifications
+    // No need to manually fetch notifications anymore
+    // The stream listener will handle updates automatically
   }
 
   Future<void> _markAllAsRead() async {
     try {
       final telecomID = await _secureStorage.read(key: 'telecomID');
-
-      QuerySnapshot querySnapshot =
-          await FirebaseFirestore.instance.collection('notification').get();
+      if (telecomID == null) {
+        debugPrint("telecomID is null");
+        return;
+      }
 
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
+      // Fetch all notifications
+      QuerySnapshot querySnapshot =
+          await FirebaseFirestore.instance.collection('notification').get();
+
       for (DocumentSnapshot doc in querySnapshot.docs) {
         List<dynamic> seenBy = List<dynamic>.from(doc['seenBy'] ?? []);
+
+        // Debug print before updating
+        debugPrint("Notification ID: ${doc.id}, SeenBy: $seenBy");
+
         if (!seenBy.contains(telecomID)) {
-          seenBy.add(telecomID!);
+          seenBy.add(telecomID); // Add telecomID to seenBy
           batch.update(doc.reference, {'seenBy': seenBy});
+
+          // Debug print after modifying the list
+          debugPrint("Updated SeenBy: $seenBy");
         }
       }
 
       await batch.commit();
-      await _fetchNotifications();
-      Navigator.pop(context);
+
+      // Force UI update
+      setState(() {
+        _unreadNotificationsCount = 0;
+      });
+
+      debugPrint("All notifications marked as read.");
     } catch (e) {
       debugPrint("Error marking notifications as read: $e");
-    }
-  }
-
-  Future<void> _fetchNotifications() async {
-    try {
-      final telecomID = await _secureStorage.read(key: 'telecomID');
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('notification')
-          .orderBy('timestamp', descending: true)
-          .get();
-
-      final notifications = querySnapshot.docs
-          .map((doc) => {
-                'adminName': doc['adminName'],
-                'content': doc['content'],
-                'timestamp': doc['timestamp'],
-                'seenBy': List<dynamic>.from(doc['seenBy'] ?? []),
-              })
-          .toList();
-
-      int unreadCount = notifications
-          .where((notification) =>
-              !(notification['seenBy'] as List<dynamic>).contains(telecomID))
-          .length;
-
-      setState(() {
-        _notifications = notifications;
-        _unreadNotificationsCount = unreadCount;
-      });
-    } catch (e) {
-      debugPrint("Error fetching notifications: $e");
     }
   }
 
@@ -165,7 +227,7 @@ class _CustomNavigationBarState extends State<CustomNavigationBar> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
-                content: Container(
+                content: SizedBox(
                   width: 320,
                   height: 400,
                   child: Column(
@@ -235,11 +297,6 @@ class _CustomNavigationBarState extends State<CustomNavigationBar> {
                                     style: TextStyle(
                                         fontSize: 11, color: Colors.grey[600]),
                                   ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.more_horiz,
-                                        color: Colors.grey),
-                                    onPressed: () {},
-                                  ),
                                 ),
                                 if (index < _notifications.length - 1)
                                   const Divider(height: 1),
@@ -270,15 +327,21 @@ class _CustomNavigationBarState extends State<CustomNavigationBar> {
   Future<void> _updateDoNotDisturbStatus(bool value) async {
     try {
       final telecomID = await _secureStorage.read(key: 'telecomID');
-      await FirebaseFirestore.instance
+
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('telecommunicationsAdmin')
           .where('telecomID', isEqualTo: telecomID)
-          .get()
-          .then((snapshot) {
-        if (snapshot.docs.isNotEmpty) {
-          snapshot.docs.first.reference.update({'doNotDisturb': value});
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        await snapshot.docs.first.reference.update({'doNotDisturb': value});
+
+        // Reinitialize notification service
+        await webNotificationService.dispose();
+        if (!value) {
+          await webNotificationService.initialize();
         }
-      });
+      }
     } catch (e) {
       debugPrint('Error updating do not disturb status: $e');
     }
@@ -332,7 +395,7 @@ class _CustomNavigationBarState extends State<CustomNavigationBar> {
             final shouldRefresh = await Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (context) => ProfilePage()), // Removed const
+                  builder: (context) => const ProfilePage()), // Removed const
             );
             if (shouldRefresh == true) {
               _fetchUserData();
