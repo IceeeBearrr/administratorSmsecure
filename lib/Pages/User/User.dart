@@ -691,103 +691,136 @@ class _UserpageState extends State<Userpage> {
                                                 );
                                               },
                                             ),
-                ListTile(
-                  leading: Icon(
-                    Icons.block,
-                    color: user["isBanned"] == true ? Colors.red : Colors.grey,
-                  ),
-                  title: Text(
-                    user["isBanned"] == true ? 'Unban User' : 'Ban User',
-                    style: TextStyle(
-                      color: user["isBanned"] == true ? Colors.red : Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context); // Close the bottom sheet
-                    // Show confirmation dialog
-                    showDialog(
-                      context: context,
-                      builder: (BuildContext dialogContext) {
-                        return AlertDialog(
-                          title: Text(
-                            user["isBanned"] == true ? 'Unban User' : 'Ban User',
-                            style: TextStyle(
-                              color: user["isBanned"] == true
-                                  ? Colors.red
-                                  : Colors.black,
-                            ),
-                          ),
-                          content: Text(
-                              'Are you sure you want to ${user["isBanned"] == true ? 'unban' : 'ban'} ${user["phoneNo"]}?'),
-                          actions: [
-                            TextButton(
-                              child: const Text('Cancel'),
-                              onPressed: () {
-                                Navigator.pop(dialogContext);
-                              },
-                            ),
-                            TextButton(
-                              child: Text(
-                                user["isBanned"] == true ? 'Unban' : 'Ban',
-                                style: TextStyle(
-                                  color: user["isBanned"] == true
-                                      ? Colors.red
-                                      : Colors.black,
-                                ),
-                              ),
-                              onPressed: () async {
-                                Navigator.pop(dialogContext); // Close the dialog
-                                try {
-                                  final String? docId = user["id"];
-                                  if (docId == null) {
-                                    scaffoldMessengerKey.currentState
-                                        ?.showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Error: Document ID is missing.'),
-                                      ),
-                                    );
-                                    return;
-                                  }
+                                            ListTile(
+                                              leading: Icon(
+                                                Icons.block,
+                                                color: user["isBanned"] == true
+                                                    ? Colors.red
+                                                    : Colors.grey,
+                                              ),
+                                              title: Text(
+                                                user["isBanned"] == true
+                                                    ? 'Unban User'
+                                                    : 'Ban User',
+                                                style: TextStyle(
+                                                  color:
+                                                      user["isBanned"] == true
+                                                          ? Colors.red
+                                                          : Colors.black,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              onTap: () {
+                                                Navigator.pop(
+                                                    context); // Close the bottom sheet
+                                                // Show confirmation dialog
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (BuildContext
+                                                      dialogContext) {
+                                                    return AlertDialog(
+                                                      title: Text(
+                                                        user["isBanned"] == true
+                                                            ? 'Unban User'
+                                                            : 'Ban User',
+                                                        style: TextStyle(
+                                                          color:
+                                                              user["isBanned"] ==
+                                                                      true
+                                                                  ? Colors.red
+                                                                  : Colors
+                                                                      .black,
+                                                        ),
+                                                      ),
+                                                      content: Text(
+                                                          'Are you sure you want to ${user["isBanned"] == true ? 'unban' : 'ban'} ${user["phoneNo"]}?'),
+                                                      actions: [
+                                                        TextButton(
+                                                          child: const Text(
+                                                              'Cancel'),
+                                                          onPressed: () {
+                                                            Navigator.pop(
+                                                                dialogContext);
+                                                          },
+                                                        ),
+                                                        TextButton(
+                                                          child: Text(
+                                                            user["isBanned"] ==
+                                                                    true
+                                                                ? 'Unban'
+                                                                : 'Ban',
+                                                            style: TextStyle(
+                                                              color:
+                                                                  user["isBanned"] ==
+                                                                          true
+                                                                      ? Colors
+                                                                          .red
+                                                                      : Colors
+                                                                          .black,
+                                                            ),
+                                                          ),
+                                                          onPressed: () async {
+                                                            Navigator.pop(
+                                                                dialogContext); // Close the dialog
+                                                            try {
+                                                              final String?
+                                                                  docId =
+                                                                  user["id"];
+                                                              if (docId ==
+                                                                  null) {
+                                                                scaffoldMessengerKey
+                                                                    .currentState
+                                                                    ?.showSnackBar(
+                                                                  const SnackBar(
+                                                                    content: Text(
+                                                                        'Error: Document ID is missing.'),
+                                                                  ),
+                                                                );
+                                                                return;
+                                                              }
 
-                                  // Update the user's "isBanned" status in Firestore
-                                  await _firestore
-                                      .collection('smsUser')
-                                      .doc(docId)
-                                      .update({
-                                    'isBanned': user["isBanned"] != true,
-                                  });
+                                                              // Update the user's "isBanned" status in Firestore
+                                                              await _firestore
+                                                                  .collection(
+                                                                      'smsUser')
+                                                                  .doc(docId)
+                                                                  .update({
+                                                                'isBanned':
+                                                                    user["isBanned"] !=
+                                                                        true,
+                                                              });
 
-                                  scaffoldMessengerKey.currentState
-                                      ?.showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'User successfully ${user["isBanned"] == true ? 'unbanned' : 'banned'}!'),
-                                    ),
-                                  );
+                                                              scaffoldMessengerKey
+                                                                  .currentState
+                                                                  ?.showSnackBar(
+                                                                SnackBar(
+                                                                  content: Text(
+                                                                      'User successfully ${user["isBanned"] == true ? 'unbanned' : 'banned'}!'),
+                                                                ),
+                                                              );
 
-                                  // Refresh the data
-                                  if (mounted) {
-                                    _refreshData();
-                                  }
-                                } catch (e) {
-                                  scaffoldMessengerKey.currentState
-                                      ?.showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'Error updating user status: $e'),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                ),
+                                                              // Refresh the data
+                                                              if (mounted) {
+                                                                _refreshData();
+                                                              }
+                                                            } catch (e) {
+                                                              scaffoldMessengerKey
+                                                                  .currentState
+                                                                  ?.showSnackBar(
+                                                                SnackBar(
+                                                                  content: Text(
+                                                                      'Error updating user status: $e'),
+                                                                ),
+                                                              );
+                                                            }
+                                                          },
+                                                        ),
+                                                      ],
+                                                    );
+                                                  },
+                                                );
+                                              },
+                                            ),
                                           ],
                                         );
                                       },
