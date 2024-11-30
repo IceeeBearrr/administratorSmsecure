@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -34,6 +35,7 @@ class _HomepageState extends State<Homepage> {
   double spamMessagePercentageChange = 0;
   final screenshotController = ScreenshotController();
   final GlobalKey chartKey = GlobalKey();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   @override
   void initState() {
@@ -814,6 +816,36 @@ class _HomepageState extends State<Homepage> {
   }
 
   Future<void> _downloadPDFReport(String section) async {
+    // Retrieve the telecomID from secure storage
+    final telecomID = await const FlutterSecureStorage().read(key: 'telecomID');
+    if (telecomID == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Telecom ID not found in secure storage')),
+      );
+      return;
+    }
+    // Define log actions based on the section
+    String successMessage;
+    String failureMessage;
+
+    switch (section) {
+      case 'malicious':
+        successMessage = "Malicious user report downloaded successfully";
+        failureMessage = "Malicious user report download failed";
+        break;
+      case 'prediction':
+        successMessage = "Prediction model report downloaded successfully";
+        failureMessage = "Prediction model report download failed";
+        break;
+      case 'spam':
+        successMessage =
+            "Spam messages and top keywords downloaded successfully";
+        failureMessage = "Spam messages and top keywords download failed";
+        break;
+      default:
+        successMessage = "Report downloaded successfully";
+        failureMessage = "Report download failed";
+    }
     try {
       setState(() => isLoading = true);
 
@@ -873,9 +905,45 @@ class _HomepageState extends State<Homepage> {
         ..click();
       html.Url.revokeObjectUrl(url);
 
+      // Log success in Firestore
+      await FirebaseFirestore.instance
+          .collection('telecommunicationsAdmin')
+          .doc(telecomID)
+          .collection('log')
+          .add({
+        'action': successMessage,
+        'timestamp': Timestamp.now(),
+        'status': 'success',
+      });
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(successMessage),
+          backgroundColor: Colors.green,
+        ),
+      );
+
       setState(() => isLoading = false);
     } catch (e) {
       debugPrint('Error generating PDF: $e');
+      await FirebaseFirestore.instance
+          .collection('telecommunicationsAdmin')
+          .doc(telecomID)
+          .collection('log')
+          .add({
+        'action': failureMessage,
+        'timestamp': Timestamp.now(),
+        'status': 'failed',
+      });
+
+      // Show failure message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(failureMessage),
+          backgroundColor: Colors.red,
+        ),
+      );
       setState(() => isLoading = false);
     }
   }

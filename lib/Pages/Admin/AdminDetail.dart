@@ -93,11 +93,11 @@ class _AdminDetailPageState extends State<AdminDetailPage> {
         if (selectedFilter?.toLowerCase() == 'prediction model') {
           matchesFilter = action.contains('and learn');
         } else if (selectedFilter?.toLowerCase() == 'download') {
-          matchesFilter = action.startsWith('download');
+          matchesFilter = action.contains('download');
         } else if (selectedFilter?.toLowerCase() == 'ban user') {
-          matchesFilter = action.startsWith('banned');
+          matchesFilter = action.contains('ban');
         } else if (selectedFilter?.toLowerCase() == 'add admin') {
-          matchesFilter = action.startsWith('admin');
+          matchesFilter = action.contains('admin');
         }
 
         // Ensure search query matching is case-insensitive

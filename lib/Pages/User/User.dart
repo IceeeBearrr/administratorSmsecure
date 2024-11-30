@@ -8,6 +8,7 @@ import 'package:telecom_smsecure/Pages/User/UserShowDetail.dart';
 import 'dart:html' as html; // Needed for web download
 import 'package:excel/excel.dart' as excel;
 import 'package:telecom_smsecure/main.dart'; // Alias the excel package to 'excel'
+import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // Import secure storage
 
 class Userpage extends StatefulWidget {
   const Userpage({super.key});
@@ -22,6 +23,7 @@ class _UserpageState extends State<Userpage> {
   String _selectedFilter = "ID"; // Default selected dropdown value
   List<Map<String, dynamic>> _filteredData = [];
   List<Map<String, dynamic>> _data = [];
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   Future<List<Map<String, dynamic>>> fetchUserData() async {
     List<Map<String, dynamic>> userList = [];
@@ -236,6 +238,13 @@ class _UserpageState extends State<Userpage> {
   }
 
   Future<void> _downloadExcel({bool onlyHighMalicious = false}) async {
+    final telecomID = await _secureStorage.read(key: 'telecomID');
+    if (telecomID == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Telecom ID not found in secure storage')),
+      );
+      return;
+    }
     try {
       final List<Map<String, dynamic>> downloadData = onlyHighMalicious
           ? _data.where((user) => user['maliciousStatus'] == 'High').toList()
@@ -313,9 +322,41 @@ class _UserpageState extends State<Userpage> {
           ..setAttribute("download", fileName)
           ..click();
         html.Url.revokeObjectUrl(url);
+
+        // Log success to Firestore
+        await _firestore
+            .collection('telecommunicationsAdmin')
+            .doc(telecomID)
+            .collection('log')
+            .add({
+          'action': onlyHighMalicious
+              ? "Malicious User downloaded successfully in Excel"
+              : "All User downloaded successfully in Excel",
+          'timestamp': Timestamp.now(),
+          'status': 'success', // Green for success
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  '${onlyHighMalicious ? 'High Malicious Users' : 'All Users'} downloaded successfully')),
+        );
       }
     } catch (e) {
       print('Excel error: $e');
+
+      // Log failure to Firestore
+      await _firestore
+          .collection('telecommunicationsAdmin')
+          .doc(telecomID)
+          .collection('log')
+          .add({
+        'action': onlyHighMalicious
+            ? "Malicious User download failed"
+            : "All User download failed",
+        'timestamp': Timestamp.now(),
+        'status': 'failed', // Red for failure
+      });
     }
   }
 
@@ -778,7 +819,23 @@ class _UserpageState extends State<Userpage> {
                                                                 );
                                                                 return;
                                                               }
-
+                                                              final telecomID =
+                                                                  await const FlutterSecureStorage()
+                                                                      .read(
+                                                                          key:
+                                                                              'telecomID');
+                                                              if (telecomID ==
+                                                                  null) {
+                                                                scaffoldMessengerKey
+                                                                    .currentState
+                                                                    ?.showSnackBar(
+                                                                  const SnackBar(
+                                                                    content: Text(
+                                                                        'Telecom ID not found in secure storage'),
+                                                                  ),
+                                                                );
+                                                                return;
+                                                              }
                                                               // Update the user's "isBanned" status in Firestore
                                                               await _firestore
                                                                   .collection(
@@ -788,6 +845,35 @@ class _UserpageState extends State<Userpage> {
                                                                 'isBanned':
                                                                     user["isBanned"] !=
                                                                         true,
+                                                              });
+
+                                                              final action =
+                                                                  user["isBanned"] ==
+                                                                          true
+                                                                      ? 'unbanned'
+                                                                      : 'banned';
+                                                              final logMessage =
+                                                                  user["isBanned"] ==
+                                                                          true
+                                                                      ? 'User ${user["phoneNo"]} unbanned successfully'
+                                                                      : 'User ${user["phoneNo"]} banned successfully';
+
+                                                              // Log the successful action to Firestore
+                                                              await _firestore
+                                                                  .collection(
+                                                                      'telecommunicationsAdmin')
+                                                                  .doc(
+                                                                      telecomID)
+                                                                  .collection(
+                                                                      'log')
+                                                                  .add({
+                                                                'action':
+                                                                    logMessage,
+                                                                'timestamp':
+                                                                    Timestamp
+                                                                        .now(),
+                                                                'status':
+                                                                    'success',
                                                               });
 
                                                               scaffoldMessengerKey
@@ -804,6 +890,37 @@ class _UserpageState extends State<Userpage> {
                                                                 _refreshData();
                                                               }
                                                             } catch (e) {
+                                                              final telecomID =
+                                                                  await const FlutterSecureStorage()
+                                                                      .read(
+                                                                          key:
+                                                                              'telecomID');
+                                                              if (telecomID !=
+                                                                  null) {
+                                                                // Log the failed action to Firestore
+                                                                final failedAction =
+                                                                    user["isBanned"] ==
+                                                                            true
+                                                                        ? 'User ${user["phoneNo"]} unban failed'
+                                                                        : 'User ${user["phoneNo"]} ban failed';
+                                                                await _firestore
+                                                                    .collection(
+                                                                        'telecommunicationsAdmin')
+                                                                    .doc(
+                                                                        telecomID)
+                                                                    .collection(
+                                                                        'log')
+                                                                    .add({
+                                                                  'action':
+                                                                      failedAction,
+                                                                  'timestamp':
+                                                                      Timestamp
+                                                                          .now(),
+                                                                  'status':
+                                                                      'failed',
+                                                                });
+                                                              }
+
                                                               scaffoldMessengerKey
                                                                   .currentState
                                                                   ?.showSnackBar(

@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart'; // For PDF preview and downloading
 import 'dart:html' as html;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // Import secure storage
 
 class PredictionModelPage extends StatefulWidget {
   const PredictionModelPage({super.key});
@@ -26,6 +27,7 @@ class _PredictionModelPageState extends State<PredictionModelPage> {
   Map<String, dynamic>?
       modelMetrics; // To store the latest metrics for the selected model
   bool isLoading = false; // For loading Firestore data
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   @override
   Widget build(BuildContext context) {
@@ -806,7 +808,14 @@ class _PredictionModelPageState extends State<PredictionModelPage> {
     return pdf.save();
   }
 
-  void _downloadPdf(Uint8List pdfBytes) {
+  void _downloadPdf(Uint8List pdfBytes) async {
+    final telecomID = await _secureStorage.read(key: 'telecomID');
+    if (telecomID == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Telecom ID not found in secure storage')),
+      );
+      return;
+    }
     try {
       final blob = html.Blob([pdfBytes], 'application/pdf');
       final url = html.Url.createObjectUrlFromBlob(blob);
@@ -821,6 +830,19 @@ class _PredictionModelPageState extends State<PredictionModelPage> {
       html.document.body?.children.remove(anchor);
       html.Url.revokeObjectUrl(url);
 
+      // Log success to Firestore
+      final successMessage =
+          "$selectedModel report have been downloaded successfully";
+      await FirebaseFirestore.instance
+          .collection('telecommunicationsAdmin')
+          .doc(telecomID)
+          .collection('log')
+          .add({
+        'action': successMessage,
+        'timestamp': Timestamp.now(),
+        'status': 'success',
+      });
+
       // Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -832,10 +854,24 @@ class _PredictionModelPageState extends State<PredictionModelPage> {
       }
     } catch (e) {
       print('Error downloading PDF: $e');
+
+      final failureMessage = "$selectedModel report download failed";
+      await FirebaseFirestore.instance
+          .collection('telecommunicationsAdmin')
+          .doc(telecomID)
+          .collection('log')
+          .add({
+        'action': failureMessage,
+        'timestamp': Timestamp.now(),
+        'status': 'failed',
+      });
+
+      // Show error message
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Error downloading report: $e"),
+            content: Text(failureMessage),
             backgroundColor: Colors.red,
           ),
         );

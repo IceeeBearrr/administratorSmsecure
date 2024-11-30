@@ -82,7 +82,7 @@ class _ProfilePageState extends State<ProfilePage> {
         } else if (selectedFilter?.toLowerCase() == 'download') {
           matchesFilter = action.contains('download');
         } else if (selectedFilter?.toLowerCase() == 'ban user') {
-          matchesFilter = action.contains('banned');
+          matchesFilter = action.contains('ban');
         } else if (selectedFilter?.toLowerCase() == 'add admin') {
           matchesFilter = action.contains('admin');
         }
@@ -111,13 +111,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
       for (var doc in querySnapshot.docs) {
         final action = doc.data()['action'] ?? '';
-        if (action.startsWith("Added and learned new message pattern")) {
+        if (action.contains("and learn")) {
           predictionCount++;
-        } else if (action.startsWith("Download")) {
+        } else if (action.contains("download")) {
           downloadCount++;
-        } else if (action.startsWith("Banned")) {
+        } else if (action.contains("ban")) {
           bannedCount++;
-        } else if (action.toLowerCase().startsWith("admin")) {
+        } else if (action.toLowerCase().contains("admin")) {
           // Add admin count condition
           adminCount++;
         }

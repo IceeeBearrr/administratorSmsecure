@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 
 class AddAdminPage extends StatefulWidget {
@@ -72,11 +73,41 @@ class _AddAdminPageState extends State<AddAdminPage> {
             .collection('telecommunicationsAdmin')
             .add(newAdminData);
 
+        final telecomID =
+            await const FlutterSecureStorage().read(key: 'telecomID');
+
+        // Log successful action to Firestore
+        if (telecomID != null) {
+          await _firestore
+              .collection('telecommunicationsAdmin')
+              .doc(telecomID)
+              .collection('log')
+              .add({
+            'action': 'Admin ${_nameController.text} added successfully',
+            'timestamp': Timestamp.now(),
+            'status': 'success',
+          });
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Admin added successfully!')),
         );
         Navigator.pop(context, true);
       } catch (e) {
+        // Log failure to Firestore
+        final telecomID =
+            await const FlutterSecureStorage().read(key: 'telecomID');
+        if (telecomID != null) {
+          await _firestore
+              .collection('telecommunicationsAdmin')
+              .doc(telecomID)
+              .collection('log')
+              .add({
+            'action': 'Failed to add admin ${_nameController.text}',
+            'timestamp': Timestamp.now(),
+            'status': 'failed',
+          });
+        }
+
         print("Error adding admin: $e");
         _showError('Error adding admin');
       }

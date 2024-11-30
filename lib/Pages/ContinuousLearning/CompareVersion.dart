@@ -8,6 +8,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:html' as html;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // Import secure storage
 
 class CompareVersion extends StatefulWidget {
   final String messagePatternId;
@@ -28,6 +29,7 @@ class _CompareVersionState extends State<CompareVersion> {
   bool isLoading = true;
   int currentModelIndex = 0;
   DateTime? messagePatternTimestamp;
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   @override
   void initState() {
@@ -75,102 +77,106 @@ class _CompareVersionState extends State<CompareVersion> {
       }
 
       // For each selected model
-    for (String modelName in selectedModels) {
-      print('Processing model: $modelName');
+      for (String modelName in selectedModels) {
+        print('Processing model: $modelName');
 
-      final modelQuerySnapshot = await FirebaseFirestore.instance
-          .collection('predictionModel')
-          .where('name', isEqualTo: modelName)
-          .get();
+        final modelQuerySnapshot = await FirebaseFirestore.instance
+            .collection('predictionModel')
+            .where('name', isEqualTo: modelName)
+            .get();
 
-      if (modelQuerySnapshot.docs.isEmpty) continue;
-      final modelDoc = modelQuerySnapshot.docs.first;
+        if (modelQuerySnapshot.docs.isEmpty) continue;
+        final modelDoc = modelQuerySnapshot.docs.first;
 
-      final allMetricsQuery = await modelDoc.reference
-          .collection('Metrics')
-          .orderBy('timestamp', descending: true)
-          .get();
+        final allMetricsQuery = await modelDoc.reference
+            .collection('Metrics')
+            .orderBy('timestamp', descending: true)
+            .get();
 
-      if (allMetricsQuery.docs.isEmpty) continue;
+        if (allMetricsQuery.docs.isEmpty) continue;
 
-      List<Map<String, dynamic>> modelVersions = [];
-      
-      // Find the closest version after message pattern timestamp
-      Map<String, dynamic>? currentVersion;
-      DateTime? currentTimestamp;
-      Duration smallestFutureGap = const Duration(days: 365);
+        List<Map<String, dynamic>> modelVersions = [];
 
-      // First, find the closest future timestamp (current version)
-      for (var doc in allMetricsQuery.docs) {
-        DateTime docTimestamp = (doc.get('timestamp') as Timestamp).toDate();
-        if (docTimestamp.isAfter(messagePatternTimestamp!)) {
-          Duration gap = docTimestamp.difference(messagePatternTimestamp!);
-          if (gap < smallestFutureGap) {
-            smallestFutureGap = gap;
-            currentVersion = doc.data();
-            currentTimestamp = docTimestamp;
-          }
-        }
-      }
+        // Find the closest version after message pattern timestamp
+        Map<String, dynamic>? currentVersion;
+        DateTime? currentTimestamp;
+        Duration smallestFutureGap = const Duration(days: 365);
 
-      // If no future timestamp found, use the closest past timestamp
-      if (currentVersion == null) {
-        Duration smallestPastGap = const Duration(days: 365);
+        // First, find the closest future timestamp (current version)
         for (var doc in allMetricsQuery.docs) {
           DateTime docTimestamp = (doc.get('timestamp') as Timestamp).toDate();
-          Duration gap = messagePatternTimestamp!.difference(docTimestamp);
-          if (gap < smallestPastGap) {
-            smallestPastGap = gap;
-            currentVersion = doc.data();
-            currentTimestamp = docTimestamp;
-          }
-        }
-      }
-
-      // Find the previous version (just before the current version)
-      Map<String, dynamic>? previousVersion;
-      if (currentTimestamp != null) {
-        Duration smallestGap = const Duration(days: 365);
-        for (var doc in allMetricsQuery.docs) {
-          DateTime docTimestamp = (doc.get('timestamp') as Timestamp).toDate();
-          if (docTimestamp.isBefore(currentTimestamp)) {
-            Duration gap = currentTimestamp.difference(docTimestamp);
-            if (gap < smallestGap) {
-              smallestGap = gap;
-              previousVersion = doc.data();
+          if (docTimestamp.isAfter(messagePatternTimestamp!)) {
+            Duration gap = docTimestamp.difference(messagePatternTimestamp!);
+            if (gap < smallestFutureGap) {
+              smallestFutureGap = gap;
+              currentVersion = doc.data();
+              currentTimestamp = docTimestamp;
             }
           }
         }
+
+        // If no future timestamp found, use the closest past timestamp
+        if (currentVersion == null) {
+          Duration smallestPastGap = const Duration(days: 365);
+          for (var doc in allMetricsQuery.docs) {
+            DateTime docTimestamp =
+                (doc.get('timestamp') as Timestamp).toDate();
+            Duration gap = messagePatternTimestamp!.difference(docTimestamp);
+            if (gap < smallestPastGap) {
+              smallestPastGap = gap;
+              currentVersion = doc.data();
+              currentTimestamp = docTimestamp;
+            }
+          }
+        }
+
+        // Find the previous version (just before the current version)
+        Map<String, dynamic>? previousVersion;
+        if (currentTimestamp != null) {
+          Duration smallestGap = const Duration(days: 365);
+          for (var doc in allMetricsQuery.docs) {
+            DateTime docTimestamp =
+                (doc.get('timestamp') as Timestamp).toDate();
+            if (docTimestamp.isBefore(currentTimestamp)) {
+              Duration gap = currentTimestamp.difference(docTimestamp);
+              if (gap < smallestGap) {
+                smallestGap = gap;
+                previousVersion = doc.data();
+              }
+            }
+          }
+        }
+
+        // Add versions in correct order
+        if (previousVersion != null) {
+          modelVersions.add(previousVersion);
+        }
+        if (currentVersion != null) {
+          modelVersions.add(currentVersion);
+        }
+
+        print('$modelName - Versions count: ${modelVersions.length}');
+        print(
+            '$modelName - Current timestamp: ${currentVersion?['timestamp']}');
+        if (previousVersion != null) {
+          print(
+              '$modelName - Previous timestamp: ${previousVersion['timestamp']}');
+        }
+
+        modelMetrics[modelName] = modelVersions;
       }
 
-      // Add versions in correct order
-      if (previousVersion != null) {
-        modelVersions.add(previousVersion);
-      }
-      if (currentVersion != null) {
-        modelVersions.add(currentVersion);
-      }
-
-      print('$modelName - Versions count: ${modelVersions.length}');
-      print('$modelName - Current timestamp: ${currentVersion?['timestamp']}');
-      if (previousVersion != null) {
-        print('$modelName - Previous timestamp: ${previousVersion['timestamp']}');
-      }
-
-      modelMetrics[modelName] = modelVersions;
+      setState(() {
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading data: $e');
+      setState(() {
+        isLoading = false;
+      });
     }
-
-    setState(() {
-      isLoading = false;
-    });
-
-  } catch (e) {
-    print('Error loading data: $e');
-    setState(() {
-      isLoading = false;
-    });
   }
-}
+
   Widget _buildComparisonStep() {
     if (selectedModels.isEmpty) {
       return const Center(
@@ -710,11 +716,8 @@ class _CompareVersionState extends State<CompareVersion> {
                       ttf),
                   buildPdfMetricRow('Recall', previousMetrics?['testRecall'],
                       currentMetrics['testRecall'], ttf),
-                  buildPdfMetricRow(
-                      'F1 Score',
-                      previousMetrics?['testF1Score'],
-                      currentMetrics['testF1Score'],
-                      ttf),
+                  buildPdfMetricRow('F1 Score', previousMetrics?['testF1Score'],
+                      currentMetrics['testF1Score'], ttf),
                 ],
               ),
             ],
@@ -922,7 +925,14 @@ class _CompareVersionState extends State<CompareVersion> {
     );
   }
 
-  void _downloadPdf(Uint8List pdfBytes, String modelName) {
+  void _downloadPdf(Uint8List pdfBytes, String modelName) async {
+    final telecomID = await _secureStorage.read(key: 'telecomID');
+    if (telecomID == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Telecom ID not found in secure storage')),
+      );
+      return;
+    }
     try {
       final blob = html.Blob([pdfBytes], 'application/pdf');
       final url = html.Url.createObjectUrlFromBlob(blob);
@@ -937,6 +947,19 @@ class _CompareVersionState extends State<CompareVersion> {
       html.document.body?.children.remove(anchor);
       html.Url.revokeObjectUrl(url);
 
+      // Log success to Firestore
+      final successMessage =
+          "$modelName report have been downloaded successfully";
+      await FirebaseFirestore.instance
+          .collection('telecommunicationsAdmin')
+          .doc(telecomID)
+          .collection('log')
+          .add({
+        'action': successMessage,
+        'timestamp': Timestamp.now(),
+        'status': 'success',
+      });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -947,6 +970,17 @@ class _CompareVersionState extends State<CompareVersion> {
       }
     } catch (e) {
       print('Error downloading PDF: $e');
+
+      final failureMessage = "$modelName report download failed";
+      await FirebaseFirestore.instance
+          .collection('telecommunicationsAdmin')
+          .doc(telecomID)
+          .collection('log')
+          .add({
+        'action': failureMessage,
+        'timestamp': Timestamp.now(),
+        'status': 'failed',
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
