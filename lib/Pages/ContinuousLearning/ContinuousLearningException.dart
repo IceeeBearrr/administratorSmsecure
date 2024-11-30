@@ -4,8 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class ContinuousLearningException extends StatelessWidget {
   final String messagePatternId;
 
-  const ContinuousLearningException({Key? key, required this.messagePatternId})
-      : super(key: key);
+  const ContinuousLearningException({super.key, required this.messagePatternId});
 
   @override
   Widget build(BuildContext context) {

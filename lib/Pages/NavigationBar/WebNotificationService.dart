@@ -197,7 +197,7 @@ Future<void> startNotificationListener() async {
           .listen((snapshot) {
         for (var change in snapshot.docChanges) {
           if (change.type == DocumentChangeType.added) {
-            final data = change.doc.data() as Map<String, dynamic>?;
+            final data = change.doc.data();
             if (data != null) {
               try {
                 // Safely handle timestamp

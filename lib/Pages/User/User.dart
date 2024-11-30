@@ -27,10 +27,58 @@ class _UserpageState extends State<Userpage> {
 
   Future<List<Map<String, dynamic>>> fetchUserData() async {
     List<Map<String, dynamic>> userList = [];
-    Set<String> processedPhoneNumbers = {}; // To avoid duplicates
+    Map<String, Map<String, dynamic>> userMap = {};
 
     try {
-      // Fetch all phone numbers from spamContact (prioritized)
+      // First fetch all smsUser entries as base data
+      QuerySnapshot smsUserSnapshot =
+          await _firestore.collection('smsUser').get();
+
+      for (var smsUserDoc in smsUserSnapshot.docs) {
+        String phoneNo = smsUserDoc['phoneNo'] ?? '';
+        String docId = smsUserDoc.id;
+
+        if (phoneNo.isNotEmpty) {
+          // Check active status
+          QuerySnapshot conversationSnapshot = await _firestore
+              .collection('conversations')
+              .where('participants', arrayContains: phoneNo)
+              .get();
+
+          bool isActive = false;
+          if (conversationSnapshot.docs.length > 3) {
+            for (var convoDoc in conversationSnapshot.docs) {
+              Timestamp lastMessageTimeStamp = convoDoc['lastMessageTimeStamp'];
+              DateTime lastMessageDate = lastMessageTimeStamp.toDate();
+              if (DateTime.now().difference(lastMessageDate).inDays <= 3) {
+                isActive = true;
+                break;
+              }
+            }
+          }
+
+          // Get the data with a null check for isBanned
+          Map<String, dynamic> userData =
+              smsUserDoc.data() as Map<String, dynamic>;
+          bool? isBanned;
+          if (userData.containsKey('isBanned')) {
+            isBanned = userData['isBanned'] as bool?;
+          }
+
+          userMap[phoneNo] = {
+            'id': docId,
+            'phoneNo': phoneNo,
+            'spamConversations': 0,
+            'spamMessagesCount': 0,
+            'majorDetectedBy': 'None',
+            'isActive': isActive,
+            'isBanned': isBanned ?? false, // Use null coalescing operator
+            'maliciousStatus': 'Low'
+          };
+        }
+      }
+
+      // Then fetch and merge spamContact data
       QuerySnapshot spamContactSnapshot = await _firestore
           .collection('spamContact')
           .where('isRemoved', isEqualTo: false)
@@ -38,124 +86,83 @@ class _UserpageState extends State<Userpage> {
 
       for (var spamDoc in spamContactSnapshot.docs) {
         String phoneNo = spamDoc['phoneNo'] ?? '';
-        String docId = spamDoc.id; // Get the document ID
+        String docId = spamDoc.id;
 
-        // Avoid duplicates by checking if the phone number is already processed
-        if (phoneNo.isEmpty || processedPhoneNumbers.contains(phoneNo)) {
-          continue;
-        }
+        if (phoneNo.isNotEmpty) {
+          // Count spam conversations and messages
+          QuerySnapshot spamMessagesSnapshot = await spamDoc.reference
+              .collection('spamMessages')
+              .where('isRemoved', isEqualTo: false)
+              .get();
 
-        processedPhoneNumbers.add(phoneNo);
+          int spamMessagesCount = spamMessagesSnapshot.docs.length;
+          int spamConversations = spamMessagesCount > 0 ? 1 : 0;
 
-        // Count spam conversations (based on spamMessages where isRemoved = false)
-        int spamConversations = 0;
-        QuerySnapshot spamMessagesSnapshot = await spamDoc.reference
-            .collection('spamMessages')
-            .where('isRemoved', isEqualTo: false)
-            .get();
-        if (spamMessagesSnapshot.docs.isNotEmpty) {
-          spamConversations =
-              1; // At least one spam message indicates one spam conversation
-        }
+          // Calculate major detected by
+          Map<String, int> detectedByCount = {};
+          for (var messageDoc in spamMessagesSnapshot.docs) {
+            String detectedBy = messageDoc['detectedDue'] ?? 'None';
+            detectedByCount[detectedBy] =
+                (detectedByCount[detectedBy] ?? 0) + 1;
+          }
+          String majorDetectedBy = detectedByCount.isEmpty
+              ? 'None'
+              : detectedByCount.entries
+                  .reduce((a, b) => a.value > b.value ? a : b)
+                  .key;
 
-        // Count the number of spam messages where isRemoved = false
-        int spamMessagesCount = spamMessagesSnapshot.docs.length;
+          // If user exists in userMap, update their data
+          if (userMap.containsKey(phoneNo)) {
+            userMap[phoneNo]!
+                .update('spamConversations', (value) => spamConversations);
+            userMap[phoneNo]!
+                .update('spamMessagesCount', (value) => spamMessagesCount);
+            userMap[phoneNo]!
+                .update('majorDetectedBy', (value) => majorDetectedBy);
+            userMap[phoneNo]!.update(
+                'maliciousStatus',
+                (value) => (spamConversations > 0 || spamMessagesCount > 0)
+                    ? 'High'
+                    : 'Low');
+          } else {
+            // Check active status for new entry
+            QuerySnapshot conversationSnapshot = await _firestore
+                .collection('conversations')
+                .where('participants', arrayContains: phoneNo)
+                .get();
 
-        // Calculate major detected by
-        Map<String, int> detectedByCount = {};
-        for (var messageDoc in spamMessagesSnapshot.docs) {
-          String detectedBy = messageDoc['detectedDue'] ?? 'None';
-          detectedByCount[detectedBy] = (detectedByCount[detectedBy] ?? 0) + 1;
-        }
-        String majorDetectedBy = detectedByCount.isEmpty
-            ? 'None'
-            : detectedByCount.entries
-                .reduce((a, b) => a.value > b.value ? a : b)
-                .key;
-
-        // Check active status
-        QuerySnapshot conversationSnapshot = await _firestore
-            .collection('conversations')
-            .where('participants', arrayContains: phoneNo)
-            .get();
-
-        bool isActive = false;
-        if (conversationSnapshot.docs.length > 3) {
-          for (var convoDoc in conversationSnapshot.docs) {
-            Timestamp lastMessageTimeStamp = convoDoc['lastMessageTimeStamp'];
-            DateTime lastMessageDate = lastMessageTimeStamp.toDate();
-            if (DateTime.now().difference(lastMessageDate).inDays <= 3) {
-              isActive = true;
-              break;
+            bool isActive = false;
+            if (conversationSnapshot.docs.length > 3) {
+              for (var convoDoc in conversationSnapshot.docs) {
+                Timestamp lastMessageTimeStamp =
+                    convoDoc['lastMessageTimeStamp'];
+                DateTime lastMessageDate = lastMessageTimeStamp.toDate();
+                if (DateTime.now().difference(lastMessageDate).inDays <= 3) {
+                  isActive = true;
+                  break;
+                }
+              }
             }
+
+            userMap[phoneNo] = {
+              'id': docId,
+              'phoneNo': phoneNo,
+              'spamConversations': spamConversations,
+              'spamMessagesCount': spamMessagesCount,
+              'majorDetectedBy': majorDetectedBy,
+              'isActive': isActive,
+              'isBanned': false, // Default value for new entries
+              'maliciousStatus':
+                  (spamConversations > 0 || spamMessagesCount > 0)
+                      ? 'High'
+                      : 'Low'
+            };
           }
         }
-
-        // Update malicious status based on spam data
-        String maliciousStatus =
-            (spamConversations == 0 && spamMessagesCount == 0) ? 'Low' : 'High';
-
-        // Add to user list
-        userList.add({
-          'id': docId, // Add the document ID
-          'phoneNo': phoneNo,
-          'spamConversations': spamConversations,
-          'spamMessagesCount': spamMessagesCount,
-          'majorDetectedBy': majorDetectedBy,
-          'isActive': isActive,
-          'maliciousStatus': maliciousStatus,
-        });
       }
 
-      // Fetch all phone numbers from smsUser (secondary)
-      QuerySnapshot smsUserSnapshot =
-          await _firestore.collection('smsUser').get();
-
-      for (var smsUserDoc in smsUserSnapshot.docs) {
-        String phoneNo = smsUserDoc['phoneNo'] ?? '';
-        String docId = smsUserDoc.id; // Get the document ID
-        bool isBanned =
-            smsUserDoc['isBanned'] ?? false; // Fetch the isBanned status
-
-        // Skip if the phone number is already processed
-        if (phoneNo.isEmpty || processedPhoneNumbers.contains(phoneNo)) {
-          continue;
-        }
-        processedPhoneNumbers.add(phoneNo);
-
-        // Check active status
-        QuerySnapshot conversationSnapshot = await _firestore
-            .collection('conversations')
-            .where('participants', arrayContains: phoneNo)
-            .get();
-
-        bool isActive = false;
-        if (conversationSnapshot.docs.length > 3) {
-          for (var convoDoc in conversationSnapshot.docs) {
-            Timestamp lastMessageTimeStamp = convoDoc['lastMessageTimeStamp'];
-            DateTime lastMessageDate = lastMessageTimeStamp.toDate();
-            if (DateTime.now().difference(lastMessageDate).inDays <= 3) {
-              isActive = true;
-              break;
-            }
-          }
-        }
-
-        // Malicious status: Set to "Low" since there are no spam data
-        String maliciousStatus = 'Low';
-
-        // Add to user list
-        userList.add({
-          'id': docId, // Add document ID
-          'phoneNo': phoneNo,
-          'spamConversations': 0,
-          'spamMessagesCount': 0,
-          'majorDetectedBy': 'None',
-          'isActive': isActive,
-          'isBanned': isBanned, // Store the banned status
-          'maliciousStatus': maliciousStatus,
-        });
-      }
+      // Convert map to list and sort by spam message count
+      userList = userMap.values.toList();
       userList.sort(
           (a, b) => b['spamMessagesCount'].compareTo(a['spamMessagesCount']));
     } catch (e) {
@@ -261,51 +268,63 @@ class _UserpageState extends State<Userpage> {
       final sheet = excelFile['Sheet1'];
 
       // Headers
-      sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0))
-        ..value = excel.TextCellValue("ID");
-      sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0))
-        ..value = excel.TextCellValue("Phone Number");
-      sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0))
-        ..value = excel.TextCellValue("Detected as Spam");
-      sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 0))
-        ..value = excel.TextCellValue("Number of Spam Messages");
-      sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 0))
-        ..value = excel.TextCellValue("Major Detected By");
-      sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: 0))
-        ..value = excel.TextCellValue("Active Status");
-      sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0))
-        ..value = excel.TextCellValue("Malicious Status");
+      sheet
+          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0))
+          .value = excel.TextCellValue("ID");
+      sheet
+          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0))
+          .value = excel.TextCellValue("Phone Number");
+      sheet
+          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0))
+          .value = excel.TextCellValue("Detected as Spam");
+      sheet
+          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 0))
+          .value = excel.TextCellValue("Number of Spam Messages");
+      sheet
+          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 0))
+          .value = excel.TextCellValue("Major Detected By");
+      sheet
+          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: 0))
+          .value = excel.TextCellValue("Active Status");
+      sheet
+          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 0))
+          .value = excel.TextCellValue("Malicious Status");
 
       // Data rows
       int rowIndex = 1;
       for (var user in downloadData) {
-        sheet.cell(excel.CellIndex.indexByColumnRow(
-            columnIndex: 0, rowIndex: rowIndex))
-          ..value = excel.TextCellValue(user['id']?.toString() ?? '');
-        sheet.cell(excel.CellIndex.indexByColumnRow(
-            columnIndex: 1, rowIndex: rowIndex))
-          ..value = excel.TextCellValue(user['phoneNo']?.toString() ?? '');
-        sheet.cell(excel.CellIndex.indexByColumnRow(
-            columnIndex: 2, rowIndex: rowIndex))
-          ..value =
-              excel.TextCellValue(user['spamConversations']?.toString() ?? '0');
-        sheet.cell(excel.CellIndex.indexByColumnRow(
-            columnIndex: 3, rowIndex: rowIndex))
-          ..value =
-              excel.TextCellValue(user['spamMessagesCount']?.toString() ?? '0');
-        sheet.cell(excel.CellIndex.indexByColumnRow(
-            columnIndex: 4, rowIndex: rowIndex))
-          ..value = excel.TextCellValue(
-              user['majorDetectedBy']?.toString() ?? 'None');
-        sheet.cell(excel.CellIndex.indexByColumnRow(
-            columnIndex: 5, rowIndex: rowIndex))
-          ..value = excel.TextCellValue(user['isBanned'] == true
-              ? "Banned" // Display "Banned" if the user is banned
-              : (user['isActive'] == true ? "Active" : "Inactive"));
-        sheet.cell(excel.CellIndex.indexByColumnRow(
-            columnIndex: 6, rowIndex: rowIndex))
-          ..value =
-              excel.TextCellValue(user['maliciousStatus']?.toString() ?? '');
+        sheet
+            .cell(excel.CellIndex.indexByColumnRow(
+                columnIndex: 0, rowIndex: rowIndex))
+            .value = excel.TextCellValue(user['id']?.toString() ?? '');
+        sheet
+            .cell(excel.CellIndex.indexByColumnRow(
+                columnIndex: 1, rowIndex: rowIndex))
+            .value = excel.TextCellValue(user['phoneNo']?.toString() ?? '');
+        sheet
+                .cell(excel.CellIndex.indexByColumnRow(
+                    columnIndex: 2, rowIndex: rowIndex))
+                .value =
+            excel.TextCellValue(user['spamConversations']?.toString() ?? '0');
+        sheet
+                .cell(excel.CellIndex.indexByColumnRow(
+                    columnIndex: 3, rowIndex: rowIndex))
+                .value =
+            excel.TextCellValue(user['spamMessagesCount']?.toString() ?? '0');
+        sheet
+                .cell(excel.CellIndex.indexByColumnRow(
+                    columnIndex: 4, rowIndex: rowIndex))
+                .value =
+            excel.TextCellValue(user['majorDetectedBy']?.toString() ?? 'None');
+        sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIndex)).value =
+            excel.TextCellValue(user['isBanned'] == true
+                ? "Banned" // Display "Banned" if the user is banned
+                : (user['isActive'] == true ? "Active" : "Inactive"));
+        sheet
+                .cell(excel.CellIndex.indexByColumnRow(
+                    columnIndex: 6, rowIndex: rowIndex))
+                .value =
+            excel.TextCellValue(user['maliciousStatus']?.toString() ?? '');
         rowIndex++;
       }
 

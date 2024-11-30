@@ -49,7 +49,7 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
 
       // Map Firestore data to the format expected by your UI
       final allData = docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         final timestamp = data['timestamp'] != null
             ? (data['timestamp'] as Timestamp).toDate()
             : DateTime.now();
@@ -465,7 +465,7 @@ class _ContinuousLearningPageState extends State<ContinuousLearningPage> {
                               ],
                             ),
                           );
-                        }).toList(),
+                        }),
                       ],
                     );
                   },

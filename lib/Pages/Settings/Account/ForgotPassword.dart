@@ -24,7 +24,7 @@ class _ForgotPasswordProfileState extends State<ForgotPasswordProfile> {
   String _errorMessage = ''; // To display errors
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _isCodeVisible = false;
-  bool _isHovered = false; // Hover state for "Back to login"
+  final bool _isHovered = false; // Hover state for "Back to login"
   String? _verificationCode; // Store verification code sent from the backend
   String _successMessage = '';
   bool _isPasswordFieldsVisible = false;

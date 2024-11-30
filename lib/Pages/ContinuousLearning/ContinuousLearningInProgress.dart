@@ -4,8 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class ContinuousLearningInProgress extends StatelessWidget {
   final String messagePatternId;
 
-  const ContinuousLearningInProgress({Key? key, required this.messagePatternId})
-      : super(key: key);
+  const ContinuousLearningInProgress({super.key, required this.messagePatternId});
 
   @override
   Widget build(BuildContext context) {
