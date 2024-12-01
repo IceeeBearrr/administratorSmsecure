@@ -3,11 +3,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:html' as html;
 import 'dart:js_util' as js_util;
-import 'package:flutter/foundation.dart';
 
 class WebNotificationService {
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
