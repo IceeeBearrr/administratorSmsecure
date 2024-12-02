@@ -30,11 +30,18 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
   bool isLoading = false; // For Step 3 loading state
   bool isSuccess = false; // To track success/failure
   String errorMessage = ""; // To store error message for failure
+  bool _showError = false;
+  String _errorMessage = '';
 
   // Secure storage instance
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   // Firestore instance
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final List<Map<String, dynamic>> _tableData = [];
+  String _selectedFilter = "False Positive";
+  final TextEditingController _searchController = TextEditingController();
+  final Set<int> _selectedRows = {};
+  bool _isLoading = false;
 
   // Shared Data to Pass
   final Map<String, dynamic> sharedData = {
@@ -43,6 +50,181 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
     "label": "",
     "reason": ""
   };
+
+  final List<String> _filterOptions = ['False Positive', 'False Negative'];
+
+  List<Map<String, dynamic>> messageRows = [
+    {"messagePattern": TextEditingController(), "label": null}
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _clearError();
+    if (currentStep == 3) {
+      _fetchData();
+    }
+  }
+
+// Add this method
+  void _onStepChanged() {
+    if (currentStep == 3) {
+      _fetchData();
+    }
+  }
+
+  Future<void> _fetchData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      _tableData.clear();
+      final querySnapshot =
+          await FirebaseFirestore.instance.collection('spamContact').get();
+
+      for (var doc in querySnapshot.docs) {
+        final spamMessages =
+            await doc.reference.collection('spamMessages').get();
+
+        for (var message in spamMessages.docs) {
+          final data = message.data();
+
+          // Format the timestamp
+          String formattedDate = '';
+          if (data['detectedAt'] != null) {
+            if (data['detectedAt'] is Timestamp) {
+              DateTime dateTime = (data['detectedAt'] as Timestamp).toDate();
+              formattedDate =
+                  "${dateTime.day} ${_getMonth(dateTime.month)} ${dateTime.year} at ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')} UTC+8";
+            } else if (data['detectedAt'] is String) {
+              formattedDate = data['detectedAt'];
+            }
+          }
+
+          // For False Positives
+          if (_selectedFilter == "False Positive" &&
+              data['isRemoved'] == true) {
+            _tableData.add({
+              'messages': data['messages'] ?? '',
+              'detectedDue': data['detectedDue'] ?? '',
+              'detectedAt': formattedDate,
+            });
+          }
+          // For False Negatives
+          else if (_selectedFilter == "False Negative" &&
+              data['detectedDue'] == 'Reported by User') {
+            _tableData.add({
+              'messages': data['messages'] ?? '',
+              'detectedDue': data['detectedDue'] ?? '',
+              'detectedAt': formattedDate,
+            });
+          }
+        }
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching data: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+// Helper function to get month name
+  String _getMonth(int month) {
+    switch (month) {
+      case 1:
+        return 'January';
+      case 2:
+        return 'February';
+      case 3:
+        return 'March';
+      case 4:
+        return 'April';
+      case 5:
+        return 'May';
+      case 6:
+        return 'June';
+      case 7:
+        return 'July';
+      case 8:
+        return 'August';
+      case 9:
+        return 'September';
+      case 10:
+        return 'October';
+      case 11:
+        return 'November';
+      case 12:
+        return 'December';
+      default:
+        return '';
+    }
+  }
+
+  bool _validateInputs() {
+    // First check if any rows are selected
+    if (_selectedRows.isEmpty) {
+      setState(() {
+        _showError = true;
+        _errorMessage = 'Please select at least one message to include.';
+      });
+      return false;
+    }
+
+    // Validate selected messages have all required fields
+    for (int index in _selectedRows) {
+      if (index >= _tableData.length) continue;
+
+      final row = _tableData[index];
+      // Check if messages or detectedDue is null or empty
+      if ((row['messages']?.toString() ?? '').trim().isEmpty ||
+          (row['detectedDue']?.toString() ?? '').trim().isEmpty) {
+        setState(() {
+          _showError = true;
+          _errorMessage =
+              'Selected messages must have both message content and detection reason.';
+        });
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  void _clearError() {
+    setState(() {
+      _showError = false;
+      _errorMessage = '';
+    });
+  }
+
+  void _filterData(String searchText) {
+    setState(() {
+      if (searchText.isEmpty) {
+        _fetchData(); // Reload all data if search is empty
+        return;
+      }
+
+      _tableData.removeWhere((element) =>
+          !element['messages']
+              .toString()
+              .toLowerCase()
+              .contains(searchText.toLowerCase()) &&
+          !element['detectedDue']
+              .toString()
+              .toLowerCase()
+              .contains(searchText.toLowerCase()) &&
+          !element['detectedAt']
+              .toString()
+              .toLowerCase()
+              .contains(searchText.toLowerCase()));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +250,9 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
             ? _buildStepOne()
             : currentStep == 2
                 ? _buildStepTwo()
-                : _buildStepThree(), // Switch between steps
+                : currentStep == 3
+                    ? _buildStepThree() // New step for False Positives and Negatives
+                    : _buildStepFour(), // Original Step 3 is now Step 4
       ),
     );
   }
@@ -83,6 +267,8 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _buildProgressCircle(isActive: true),
+            _buildProgressLine(),
+            _buildProgressCircle(isActive: false),
             _buildProgressLine(),
             _buildProgressCircle(isActive: false),
             _buildProgressLine(),
@@ -201,183 +387,615 @@ class _LearnNewPatternPageOneState extends State<LearnNewPatternPageOne> {
     );
   }
 
-  // Step 2: Define Message Pattern and Details
+  void addNewRow() {
+    setState(() {
+      messageRows
+          .add({"messagePattern": TextEditingController(), "label": null});
+    });
+  }
+
+// Step 2: Define Message Pattern and Details
   Widget _buildStepTwo() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Progress Indicator
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+    return SingleChildScrollView(
+      child: Form(
+        key: _formKey,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0), // Add padding for better spacing
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildProgressCircle(isActive: true),
-              _buildProgressLine(),
-              _buildProgressCircle(isActive: true),
-              _buildProgressLine(),
-              _buildProgressCircle(isActive: false),
+              // Progress Indicator
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildProgressCircle(isActive: true),
+                  _buildProgressLine(),
+                  _buildProgressCircle(isActive: true),
+                  _buildProgressLine(),
+                  _buildProgressCircle(isActive: false),
+                  _buildProgressLine(),
+                  _buildProgressCircle(isActive: false),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Header Title
+              const Text(
+                "Define Message Pattern and Details",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF113953),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Description
+              const Text(
+                "Provide the message pattern you want to analyze, assign a label (e.g., Spam or Ham) for categorization, and optionally include a reason or note to explain your choice. This information will help the system better understand and learn the context of your data.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+              const SizedBox(height: 40),
+
+              // Form Inputs
+              // Dynamic List of Rows
+              Column(
+                children: messageRows.map((row) {
+                  int index = messageRows.indexOf(row);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10.0),
+                    child: Row(
+                      children: [
+                        // Message Pattern Input
+                        Expanded(
+                          flex: 2,
+                          child: TextFormField(
+                            controller: row["messagePattern"],
+                            decoration: InputDecoration(
+                              labelText: "Message Pattern ${index + 1}",
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return "Message Pattern cannot be empty";
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+
+                        // Label Dropdown
+                        Expanded(
+                          flex: 1,
+                          child: DropdownButtonFormField2<String>(
+                            decoration: const InputDecoration(
+                              contentPadding: EdgeInsets.zero,
+                              border: InputBorder.none,
+                            ),
+                            isExpanded: true,
+                            hint: const Text(
+                              'Label',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                            items: ["Spam", "Ham"]
+                                .map((label) => DropdownMenuItem<String>(
+                                      value: label,
+                                      child: Text(label),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                row["label"] = value;
+                              });
+                            },
+                            value: row["label"],
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return "Label cannot be empty";
+                              }
+                              return null;
+                            },
+                            buttonStyleData: ButtonStyleData(
+                              height: 50,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: const Color.fromARGB(255, 121, 116,
+                                      126), // Updated border color
+                                ),
+                                color: Colors.white,
+                              ),
+                            ),
+                            dropdownStyleData: DropdownStyleData(
+                              maxHeight: 200,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+
+                        // Remove Button
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              messageRows.removeAt(index);
+                            });
+                          },
+                          icon: const Icon(Icons.close, color: Colors.red),
+                          tooltip: "Remove this row",
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              // Add Button
+              const SizedBox(height: 10),
+
+              // Add Button
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  onPressed: addNewRow,
+                  icon: const Icon(Icons.add, color: Color(0xFF0066CC)),
+                  tooltip: "Add a new row",
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _reasonController,
+                decoration: InputDecoration(
+                  labelText: "Reason (Optional)",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Navigation Buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        currentStep = 2; // Move back to step 2
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade300,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 30, vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      "Previous step",
+                      style: TextStyle(color: Colors.black, fontSize: 16),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (_formKey.currentState!.validate()) {
+                        setState(() {
+                          sharedData["messagePatterns"] = messageRows
+                              .map((row) => {
+                                    "pattern": row["messagePattern"].text,
+                                    "label": row["label"]
+                                  })
+                              .toList();
+                          sharedData["reason"] = _reasonController.text;
+                          currentStep = 3;
+                          _onStepChanged();
+                          isLoading =
+                              true; // Ensure loading is the default state
+                          isSuccess = false;
+                          errorMessage = ""; // Reset error message
+                        });
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0066CC),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 30, vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      "Next step",
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 20),
-
-          // Header Title
-          const Text(
-            "Define Message Pattern and Details",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF113953),
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Description
-          const Text(
-            "Provide the message pattern you want to analyze, assign a label (e.g., Spam or Ham) for categorization, and optionally include a reason or note to explain your choice. This information will help the system better understand and learn the context of your data.",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-          const SizedBox(height: 40),
-
-          // Form Inputs
-          // Form Inputs
-          TextFormField(
-            controller: _messagePatternController,
-            decoration: InputDecoration(
-              labelText: "Message Pattern",
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return "Message Pattern cannot be empty";
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 20),
-
-DropdownButtonFormField2<String>(
-  decoration: const InputDecoration(
-    contentPadding: EdgeInsets.zero,
-    border: InputBorder.none, // Removes the default text field border
-  ),
-  isExpanded: true, // Expands the dropdown to fill the available width
-  hint: const Text(
-    'Select a label',
-    style: TextStyle(fontSize: 16),
-  ),
-  items: ["Spam", "Ham"]
-      .map((label) => DropdownMenuItem<String>(
-            value: label,
-            child: Text(label),
-          ))
-      .toList(),
-  onChanged: (value) {
-    selectedLabel = value;
-  },
-  validator: (value) {
-    if (value == null || value.isEmpty) {
-      return "Label cannot be empty";
-    }
-    return null;
-  },
-  buttonStyleData: ButtonStyleData(
-    height: 60,
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(
-        color: const Color.fromARGB(255, 121, 116, 126), // Updated border color
+        ),
       ),
-      color: Colors.white, // Ensures that the dropdown background remains white
-    ),
-  ),
-  dropdownStyleData: DropdownStyleData(
-    maxHeight: 200,
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(10),
-      color: Colors.white, // Keeps the dropdown background color white
-    ),
-  ),
-),
+    );
+  }
 
-          const SizedBox(height: 20),
-          TextField(
-            controller: _reasonController,
-            decoration: InputDecoration(
-              labelText: "Reason (Optional)",
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+// Step 3: False Positives and False Negatives
+  Widget _buildStepThree() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Progress Indicator with fixed width
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildProgressCircle(isActive: true),
+                  _buildProgressLine(),
+                  _buildProgressCircle(isActive: true),
+                  _buildProgressLine(),
+                  _buildProgressCircle(isActive: true),
+                  _buildProgressLine(),
+                  _buildProgressCircle(isActive: false),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 32),
 
-          // Navigation Buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    currentStep = 1; // Move back to step 1
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey.shade300,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  "Previous step",
-                  style: TextStyle(color: Colors.black, fontSize: 16),
-                ),
+            // Title and Description
+            const Text(
+              "Do you want to include these in the learning?",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF113953),
               ),
-              ElevatedButton(
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    setState(() {
-                      sharedData["messagePattern"] =
-                          _messagePatternController.text;
-                      sharedData["label"] = selectedLabel;
-                      sharedData["reason"] = _reasonController.text;
-                      currentStep = 3;
-                      isLoading = true; // Ensure loading is the default state
-                      isSuccess = false;
-                      errorMessage = ""; // Reset error message
-                    });
-                    _startRetrainProcess(sharedData);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0066CC),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "These messages are gathered from user feedback. False Positive: Messages that are ham but predicted as spam. False Negative: Messages that are spam but predicted as ham.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            const SizedBox(height: 32),
+
+            // Filter and Search Row
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  // Filter Dropdown
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton2<String>(
+                        value: _selectedFilter,
+                        items: _filterOptions.map((option) {
+                          return DropdownMenuItem<String>(
+                            value: option,
+                            child: Text(option),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _selectedFilter = value;
+                              _searchController
+                                  .clear(); // Clear search when filter changes
+                            });
+                            _fetchData(); // Fetch new data when filter changes
+                          }
+                        },
+                        buttonStyleData: ButtonStyleData(
+                          height: 40,
+                          width: 140,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                          ),
+                        ),
+                        dropdownStyleData: DropdownStyleData(
+                          maxHeight: 200,
+                          width: 140,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                          ),
+                          scrollbarTheme: ScrollbarThemeData(
+                            radius: const Radius.circular(40),
+                            thickness: MaterialStateProperty.all(6),
+                            thumbVisibility: MaterialStateProperty.all(true),
+                          ),
+                        ),
+                        menuItemStyleData: const MenuItemStyleData(
+                          height: 40,
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  "Next step",
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
+                  const SizedBox(width: 16),
+
+                  // Search Box
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _filterData,
+                      decoration: InputDecoration(
+                        hintText: "Search messages...",
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 24),
+
+            // Table Container
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                children: [
+                  // Table Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(8)),
+                      border: Border(
+                          bottom: BorderSide(color: Colors.grey.shade200)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Expanded(
+                            flex: 5,
+                            child: Text("Message",
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        Expanded(
+                            flex: 2,
+                            child: Text("Detected Due",
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        Expanded(
+                            flex: 3,
+                            child: Text("Detected At",
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                        SizedBox(
+                            width: 80,
+                            child: Text("Include",
+                                style: TextStyle(fontWeight: FontWeight.bold))),
+                      ],
+                    ),
+                  ),
+
+                  // Table Content
+                  Container(
+                    constraints: const BoxConstraints(
+                        maxHeight: 400), // Fixed height for scrollable content
+                    child: _isLoading
+                        ? const Center(
+                            child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: CircularProgressIndicator(),
+                          ))
+                        : _tableData.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(24),
+                                  child: Text("No data found"),
+                                ),
+                              )
+                            : ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _tableData.length,
+                                itemBuilder: (context, index) {
+                                  final item = _tableData[index];
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                          bottom: BorderSide(
+                                              color: Colors.grey.shade200)),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 24, vertical: 16),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            flex: 5,
+                                            child: Text(
+                                              item['messages'] ?? '',
+                                              style:
+                                                  const TextStyle(fontSize: 14),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(
+                                              item['detectedDue'] ?? '',
+                                              style:
+                                                  const TextStyle(fontSize: 14),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 3,
+                                            child: Text(
+                                              item['detectedAt'] ?? '',
+                                              style:
+                                                  const TextStyle(fontSize: 14),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 80,
+                                            child: Checkbox(
+                                              value:
+                                                  _selectedRows.contains(index),
+                                              onChanged: (bool? value) {
+                                                setState(() {
+                                                  if (value == true) {
+                                                    _selectedRows.add(index);
+                                                  } else {
+                                                    _selectedRows.remove(index);
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Navigation Buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Error message (only shows when _showError is true)
+                  if (_showError)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red.shade700),
+                          const SizedBox(width: 8),
+                          Text(
+                            _errorMessage,
+                            style: TextStyle(color: Colors.red.shade700),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Navigation Buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () {
+                          // Validate before going back
+                          if (messageRows.isEmpty || !_validateInputs()) {
+                            setState(() {
+                              _showError = true;
+                              _errorMessage =
+                                  'Please add at least one message pattern and label before proceeding.';
+                            });
+                            return;
+                          }
+                          setState(() {
+                            currentStep = 2;
+                            _showError = false;
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey.shade300,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text("Previous step",
+                            style: TextStyle(color: Colors.black)),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          // Validate before proceeding
+                          if (messageRows.isEmpty || !_validateInputs()) {
+                            setState(() {
+                              _showError = true;
+                              _errorMessage =
+                                  'Please add at least one message pattern and label before proceeding.';
+                            });
+                            return;
+                          }
+                          setState(() {
+                            // Update sharedData with selected messages
+                            sharedData["messagePatterns"] = messageRows
+                                .where((row) => _selectedRows
+                                    .contains(messageRows.indexOf(row)))
+                                .map((row) => {
+                                      "pattern": row["messages"],
+                                      "label": row["detectedDue"]
+                                    })
+                                .toList();
+
+                            currentStep = 4;
+                            _showError = false;
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0066CC),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text("Next step",
+                            style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   // Step 3: Progress and Training
-  Widget _buildStepThree() {
+  Widget _buildStepFour() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -389,7 +1007,9 @@ DropdownButtonFormField2<String>(
             _buildProgressLine(),
             _buildProgressCircle(isActive: true),
             _buildProgressLine(),
-            _buildProgressCircle(isActive: true), // Active for Step 3
+            _buildProgressCircle(isActive: true),
+            _buildProgressLine(),
+            _buildProgressCircle(isActive: true),
           ],
         ),
         const SizedBox(height: 20),
